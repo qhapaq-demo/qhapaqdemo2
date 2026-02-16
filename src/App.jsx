@@ -14,7 +14,11 @@ import logoABermud from './logo_Abermud.jpg';
 
 function App() {
   // Estados principales
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+  // Recuperar pestaña guardada al cargar la app
+  const savedTab = localStorage.getItem('abermud-active-tab');
+  return savedTab || 'dashboard';
+});
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
   const [sales, setSales] = useState([]);
@@ -116,6 +120,10 @@ function App() {
       stockSubscription.unsubscribe();
     };
   }, []);
+  // Guardar pestaña activa en localStorage
+useEffect(() => {
+  localStorage.setItem('abermud-active-tab', activeTab);
+}, [activeTab]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -1068,40 +1076,44 @@ const shareOrderViaWhatsApp = (sale) => {
       <header className="bg-black text-white sticky top-0 z-40 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-5 md:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-        {/* Logo con imagen */}
-        <img 
-          src={logoABermud} 
-          alt="ABermud Logo" 
-          className="w-12 h-12 md:w-10 md:h-10 rounded-full object-cover"
-        />
-        <div>
-          <h1 className="text-2xl md:text-xl font-bold">ABermud</h1>
-          <p className="text-sm md:text-sm text-gray-300">Lo bueno va contigo</p>
-        </div>
-      </div>
+            {/* Logo clickeable - vuelve al Dashboard */}
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            >
+              {/* Logo con imagen MÁS GRANDE */}
+              <img 
+                src={logoABermud} 
+                alt="ABermud Logo" 
+                className="w-16 h-16 md:w-14 md:h-14 rounded-full object-cover"
+              />
+              <div className="text-left">
+                <h1 className="text-3xl md:text-2xl font-bold">ABermud</h1>
+                <p className="text-base md:text-sm text-gray-300 italic">Lo bueno va contigo</p>
+              </div>
+            </button>
 
-      <div className="hidden md:flex items-center gap-2">
-        <div className="text-right mr-4">
-          <p className="text-sm font-medium">Ingresos del día</p>
-          <p className="text-xl font-bold text-emerald-400">
-            S/ {sales
-              .filter(s => s.fecha === getPeruDateTime().fecha)
-              .reduce((sum, s) => sum + s.total, 0)
-              .toFixed(2)}
-          </p>
-        </div>
-      </div>
+            <div className="hidden md:flex items-center gap-2">
+              <div className="text-right mr-4">
+                <p className="text-sm font-medium">Ingresos del día</p>
+                <p className="text-xl font-bold text-emerald-400">
+                  S/ {sales
+                    .filter(s => s.fecha === getPeruDateTime().fecha)
+                    .reduce((sum, s) => sum + s.total, 0)
+                    .toFixed(2)}
+                </p>
+              </div>
+            </div>
 
-      <button 
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="md:hidden p-2 hover:bg-white/10 rounded-lg"
-      >
-        <Menu size={24} />
-      </button>
-    </div>
-  </div>
-</header>
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 hover:bg-white/10 rounded-lg"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
+        </div>
+      </header>
 
       {/* NAVIGATION */}
       <nav className={`
@@ -1140,7 +1152,7 @@ const shareOrderViaWhatsApp = (sale) => {
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 text-xl md:text-base">
         
         {/* ============================================ */}
         {/* TAB: DASHBOARD */}
@@ -1148,50 +1160,50 @@ const shareOrderViaWhatsApp = (sale) => {
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 md:grid-cols-4 gap-2 md:gap-4">
               {/* CARD 1: PRODUCTOS */}
-              <div className="bg-white p-3 rounded-m shadow-sm border">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <Package className="text-blue-600" size={22} />
+              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2 bg-blue-50 rounded-m">
+                    <Package className="text-blue-500" size={24} />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">Productos</p>
+                <p className="text-sm text-gray-600 mb-1">Productos</p>
                 <p className="text-1xl font-bold">{products.length}</p>
               </div>
 
               {/* CARD 2: CLIENTES */}
-              <div className="bg-white p-3 rounded-m shadow-sm border">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="p-3 bg-purple-50 rounded-lg">
-                    <Users className="text-purple-600" size={22} />
+              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2 bg-purple-50 rounded-m">
+                    <Users className="text-purple-500" size={24} />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">Clientes</p>
+                <p className="text-sm text-gray-600 mb-1">Clientes</p>
                 <p className="text-1xl font-bold">{clients.length}</p>
               </div>
 
               {/* CARD 3: VENTAS DEL DÍA */}
-              <div className="bg-white p-3 rounded-m shadow-sm border">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="p-3 bg-emerald-50 rounded-lg">
-                    <ShoppingCart className="text-emerald-600" size={22} />
+              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2 bg-emerald-50 rounded-m">
+                    <ShoppingCart className="text-emerald-500" size={24} />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">Ventas del Día</p>
+                <p className="text-sm text-gray-600 mb-1">Ventas del Día</p>
                 <p className="text-1xl font-bold">
                   {sales.filter(s => s.fecha === getPeruDateTime().fecha).length}
                 </p>
               </div>
 
               {/* CARD 4: INGRESOS DEL DÍA */}
-              <div className="bg-white p-3 rounded-m shadow-sm border">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="p-3 bg-orange-50 rounded-lg">
-                    <DollarSign className="text-orange-600" size={22} />
+              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2 bg-orange-50 rounded-m">
+                    <DollarSign className="text-orange-500" size={24} />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">Ingresos del Día</p>
+                <p className="text-sm text-gray-600 mb-1">Ingresos del Día</p>
                 <p className="text-1xl font-bold">
                   S/ {sales
                     .filter(s => s.fecha === getPeruDateTime().fecha)
@@ -1201,62 +1213,105 @@ const shareOrderViaWhatsApp = (sale) => {
               </div>
             </div>
 
-            {/* Top Products & Low Stock */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top Selling Products */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <TrendingUp size={20} />
-                  Productos Más Vendidos
-                </h3>
-                <div className="space-y-3">
-                  {topSellingProducts().map(([modelo, cantidad], index) => (
-                    <div key={modelo} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg text-gray-400">#{index + 1}</span>
-                        <span className="font-medium">{modelo}</span>
-                      </div>
-                      <span className="text-sm bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-medium">
-                        {cantidad} vendidos
-                      </span>
-                    </div>
-                  ))}
-                  {topSellingProducts().length === 0 && (
-                    <p className="text-center text-gray-500 py-8">No hay ventas registradas</p>
-                  )}
+            {/* 6 BOTONES PRINCIPALES - Estilo KeyFacil */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
+              {/* BOTÓN: INVENTARIO */}
+              <button
+                onClick={() => setActiveTab('inventario')}
+                className="group relative bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <Package size={40} strokeWidth={2} />
+                  </div>
+                  <span className="font-bold text-xl">Inventario</span>
                 </div>
-              </div>
+              </button>
 
-              {/* Low Stock Alert */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <AlertCircle size={20} className="text-orange-500" />
-                  Alertas de Stock Bajo
-                </h3>
-                <div className="space-y-3">
-                  {lowStockProducts.map(product => {
-                    let total = 0;
-                    Object.values(product.stock || {}).forEach(tallas => {
-                      Object.values(tallas).forEach(cantidad => total += cantidad);
-                    });
-                    return (
-                      <div key={product.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <span className="font-medium">{product.modelo}</span>
-                        <span className="text-sm bg-orange-200 text-orange-800 px-3 py-1 rounded-full font-medium">
-                          {total} unidades
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {lowStockProducts.length === 0 && (
-                    <p className="text-center text-gray-500 py-8">Todos los productos tienen stock suficiente</p>
-                  )}
+              {/* BOTÓN: CLIENTES */}
+              <button
+                onClick={() => setActiveTab('clientes')}
+                className="group relative bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <Users size={40} strokeWidth={2} />
+                  </div>
+                  <span className="font-bold text-xl">Clientes</span>
                 </div>
-              </div>
+              </button>
+
+              {/* BOTÓN: VENTAS */}
+              <button
+                onClick={() => setActiveTab('ventas')}
+                className="group relative bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <ShoppingCart size={40} strokeWidth={2} />
+                  </div>
+                  <span className="font-bold text-xl">Ventas</span>
+                </div>
+              </button>
+
+              {/* BOTÓN: REPORTES */}
+              <button
+                onClick={() => setActiveTab('reportes')}
+                className="group relative bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <BarChart3 size={40} strokeWidth={2} />
+                  </div>
+                  <span className="font-bold text-xl">Reportes</span>
+                </div>
+              </button>
+
+              {/* BOTÓN: BACKUP */}
+              <button
+                onClick={() => alert('Función de Backup en desarrollo')}
+                className="group relative bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <Download size={40} strokeWidth={2} />
+                  </div>
+                  <span className="font-bold text-xl">Backup</span>
+                </div>
+              </button>
+
+              {/* BOTÓN: CONFIGURACIÓN */}
+              <button
+                onClick={() => alert('Función de Configuración en desarrollo')}
+                className="group relative bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6"></path>
+                        <path d="m4.2 4.2 4.3 4.3m5 5 4.3 4.3"></path>
+                        <path d="M1 12h6m6 0h6"></path>
+                        <path d="m4.2 19.8 4.3-4.3m5-5 4.3-4.3"></path>
+                      </svg>
+                    </div>
+                  </div>
+                  <span className="font-bold text-xl">Configuración</span>
+                </div>
+              </button>
+            </div>
+
+            {/* FOOTER */}
+            <div className="mt-12 pt-8 border-t text-center text-sm text-gray-600">
+              <p className="font-medium">© 2026 Qhapaq</p>
+              <p className="mt-1">Sistema de gestión de inventario y ventas</p>
+              <p className="mt-1">Parte de <span className="font-semibold">InteliGest</span></p>
+              <p className="text-xs mt-1 text-gray-500">Desarrollado en Perú 🇵🇪</p>
             </div>
           </div>
         )}
-
+   
         {/* ============================================ */}
         {/* TAB: INVENTARIO */}
         {/* ============================================ */}
