@@ -138,20 +138,20 @@ function App() {
 
     // ── HEADER NEGRO ──────────────────────────────
     doc.setFillColor(0, 0, 0);
-    doc.rect(0, 50, pageWidth, 38, 'F');
+    doc.rect(0, 30, pageWidth, 38, 'F');
 
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(32);
     doc.setFont(undefined, 'bold');
-    doc.text('ABermud', margin, 64);
+    doc.text('ABermud', margin, 44);
 
     doc.setFontSize(14);
     doc.setFont(undefined, 'italic');
-    doc.text('Lo bueno va contigo', margin, 72);
+    doc.text('Lo bueno va contigo', margin, 52);
 
     doc.setFont(undefined, 'normal');
     doc.setFontSize(12);
-    doc.text(`Fecha: ${fecha}`, margin, 80);
+    doc.text(`Fecha: ${fecha}`, margin, 60);
 
     // ── TÍTULO DEL REPORTE ────────────────────────
     let tituloReporte = '';
@@ -162,7 +162,7 @@ function App() {
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
-    doc.text(tituloReporte, margin, 100);
+    doc.text(tituloReporte, margin, 80);
 
     // ── PREPARAR DATOS ────────────────────────────
     const stockData = getStockALaFechaReport();
@@ -226,7 +226,7 @@ function App() {
 
     // ── GENERAR TABLA ─────────────────────────────
     doc.autoTable({
-      startY: 105,
+      startY: 85,
       head: [headers],
       body: bodyData,
       margin: { left: margin, right: margin },
@@ -237,11 +237,11 @@ function App() {
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         halign: 'center',
-        fontSize: 12,
+        fontSize: 8,
         cellPadding: 3,
       },
       bodyStyles: {
-        fontSize: 11,
+        fontSize: 9,
         cellPadding: 3,
       },
       columnStyles,
