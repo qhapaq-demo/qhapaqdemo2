@@ -1127,7 +1127,9 @@ const shareOrderViaWhatsApp = (sale) => {
               { id: 'inventario', icon: Package, label: 'Inventario' },
               { id: 'clientes', icon: Users, label: 'Clientes' },
               { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
-              { id: 'reportes', icon: TrendingUp, label: 'Reportes' }
+              { id: 'reportes', icon: TrendingUp, label: 'Reportes' },
+              { id: 'backup', icon: Download, label: 'Backup' },
+              { id: 'configuracion', icon: TrendingUp, label: 'Configuración' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1269,7 +1271,7 @@ const shareOrderViaWhatsApp = (sale) => {
 
               {/* BOTÓN: BACKUP */}
               <button
-                onClick={() => alert('Función de Backup en desarrollo')}
+                onClick={() => setActiveTab('backup')}
                 className="group relative bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
                 <div className="flex flex-col items-center gap-3">
@@ -1282,7 +1284,7 @@ const shareOrderViaWhatsApp = (sale) => {
 
               {/* BOTÓN: CONFIGURACIÓN */}
               <button
-                onClick={() => alert('Función de Configuración en desarrollo')}
+                onClick={() => setActiveTab('configuracion')}
                 className="group relative bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
                 <div className="flex flex-col items-center gap-3">
@@ -2274,6 +2276,77 @@ const shareOrderViaWhatsApp = (sale) => {
                       </div>
                     );
                   })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ============================================ */}
+        {/* TAB: BACKUP */}
+        {/* ============================================ */}
+        {activeTab === 'backup' && (
+          <div className="space-y-6">
+            {/* Botón Volver - Solo Móvil */}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className="md:hidden flex items-center gap-2 text-gray-600 hover:text-black font-medium"
+            >
+              <ChevronLeft size={20} />
+              <span>Volver al Dashboard</span>
+            </button>
+
+            <div className="bg-white p-8 rounded-xl shadow-sm border text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Download size={40} className="text-orange-600" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Backup de Datos</h2>
+                <p className="text-gray-600 mb-4">
+                  Esta funcionalidad está en desarrollo
+                </p>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-sm text-orange-800">
+                    Próximamente podrás descargar un backup completo de tus datos en formato Excel
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================ */}
+        {/* TAB: CONFIGURACIÓN */}
+        {/* ============================================ */}
+        {activeTab === 'configuracion' && (
+          <div className="space-y-6">
+            {/* Botón Volver - Solo Móvil */}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className="md:hidden flex items-center gap-2 text-gray-600 hover:text-black font-medium"
+            >
+              <ChevronLeft size={20} />
+              <span>Volver al Dashboard</span>
+            </button>
+
+            <div className="bg-white p-8 rounded-xl shadow-sm border text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M12 1v6m0 6v6"></path>
+                    <path d="m4.2 4.2 4.3 4.3m5 5 4.3 4.3"></path>
+                    <path d="M1 12h6m6 0h6"></path>
+                    <path d="m4.2 19.8 4.3-4.3m5-5 4.3-4.3"></path>
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Configuración</h2>
+                <p className="text-gray-600 mb-4">
+                  Esta funcionalidad está en desarrollo
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-800">
+                    Próximamente podrás configurar usuarios, claves y ajustes del sistema
+                  </p>
                 </div>
               </div>
             </div>
