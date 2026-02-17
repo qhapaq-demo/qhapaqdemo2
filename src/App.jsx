@@ -3,7 +3,7 @@ import {
   Package, Users, ShoppingCart, TrendingUp, DollarSign, 
   AlertCircle, Plus, Edit2, Trash2, Search, X, Download,
   FileText, Share2, Eye, Menu, Home, ChevronRight, ChevronLeft,
-  Calendar, Filter, Upload, BarChart3
+  Calendar, Filter, Upload, BarChart3, FileDown
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -84,6 +84,186 @@ function App() {
     start: getPeruDateTime().fecha,
     end: getPeruDateTime().fecha
   });
+
+  // ============================================
+  // FUNCIÓN PARA ABREVIAR NOMBRES DE PRODUCTOS
+  // ============================================
+  const abreviarNombreProducto = (nombreCompleto) => {
+    if (!nombreCompleto) return '';
+    
+    const palabras = nombreCompleto.trim().split(' ');
+    
+    const abreviaciones = {
+      'Jogger': 'J.',
+      'Polos': 'P.',
+      'Polo': 'P.',
+      'Boca': '',
+      'Recta': '',
+      'French': 'F.',
+      'Terry': 'T.',
+      'Dama': 'Dama',
+      'Varón': 'Varón',
+      'Casual': 'Casual',
+      'Clásico': 'Clás.',
+      'Americano': 'Amer.',
+      'Bolsillo': 'Bols.',
+      'Afuera': 'Af.'
+    };
+    
+    const resultado = palabras
+      .map(palabra => {
+        if (abreviaciones.hasOwnProperty(palabra)) {
+          return abreviaciones[palabra];
+        }
+        if (palabra.length <= 5) {
+          return palabra;
+        }
+        return palabra.charAt(0) + '.';
+      })
+      .filter(p => p !== '')
+      .join(' ');
+    
+    return resultado;
+  };
+
+// ============================================
+  // FUNCIÓN PARA DESCARGAR REPORTE EN PDF
+  // ============================================
+  const descargarReportePDF = (tipoReporte) => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
+    const pageWidth = doc.internal.pageSize.getWidth();   // 297mm
+    const pageHeight = doc.internal.pageSize.getHeight(); // 210mm
+    const margin = 15;
+
+    // ── HEADER NEGRO ──────────────────────────────
+    doc.setFillColor(0, 0, 0);
+    doc.rect(0, 50, pageWidth, 38, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(32);
+    doc.setFont(undefined, 'bold');
+    doc.text('ABermud', margin, 64);
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'italic');
+    doc.text('Lo bueno va contigo', margin, 72);
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(12);
+    doc.text(`Fecha: ${fecha}`, margin, 80);
+
+    // ── TÍTULO DEL REPORTE ────────────────────────
+    let tituloReporte = '';
+    if (tipoReporte === 'stock_fecha')  tituloReporte = `STOCK A LA FECHA (${fecha})`;
+    if (tipoReporte === 'ingresos')     tituloReporte = `INGRESO DE STOCK (${fecha})`;
+    if (tipoReporte === 'salidas')      tituloReporte = `SALIDA - VENTAS (${fecha})`;
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text(tituloReporte, margin, 100);
+
+    // ── PREPARAR DATOS ────────────────────────────
+    const stockData = getStockALaFechaReport();
+    const sortedProducts = [...products].sort((a, b) => {
+      return (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0);
+    });
+
+    const headers = ['FECHA', ...sortedProducts.map(p => p.modelo)];
+    let bodyData = [];
+
+    if (tipoReporte === 'stock_fecha') {
+      bodyData = [
+        [fecha, ...sortedProducts.map(p => String(stockData[p.modelo] || 0))],
+        ['TOTAL', ...sortedProducts.map(p => String(stockData[p.modelo] || 0))]
+      ];
+    } else if (tipoReporte === 'ingresos') {
+      const ingresoData = getIngresoStockReport();
+      if (Object.keys(ingresoData).length === 0) {
+        bodyData = [['Sin ingresos en este período', ...sortedProducts.map(() => '')]];
+      } else {
+        bodyData = Object.entries(ingresoData).map(([f, modelos]) => [
+          f.split('-').reverse().join('/'),
+          ...sortedProducts.map(p => String(modelos[p.modelo] || '-'))
+        ]);
+      }
+    } else if (tipoReporte === 'salidas') {
+      const salidaData = getSalidaVentasReport();
+      if (Object.keys(salidaData).length === 0) {
+        bodyData = [['Sin ventas en este período', ...sortedProducts.map(() => '')]];
+      } else {
+        bodyData = Object.entries(salidaData).map(([f, modelos]) => [
+          f.split('-').reverse().join('/'),
+          ...sortedProducts.map(p => String(modelos[p.modelo] || '0'))
+        ]);
+      }
+    }
+
+    // ── CALCULAR ANCHO DE COLUMNAS ────────────────
+    const tableWidth = pageWidth - margin * 2;             // ancho disponible
+    const totalCols = headers.length;
+    const fechaColWidth = 30;                              // columna FECHA fija
+    const restWidth = tableWidth - fechaColWidth;
+    const colWidth = restWidth / (totalCols - 1);          // resto dividido igual
+
+    const columnStyles = { 0: { cellWidth: fechaColWidth, halign: 'left', fontStyle: 'bold' } };
+    for (let i = 1; i < totalCols; i++) {
+      columnStyles[i] = { cellWidth: colWidth, halign: 'center' };
+    }
+
+    // ── GENERAR TABLA ─────────────────────────────
+    doc.autoTable({
+      startY: 105,
+      head: [headers],
+      body: bodyData,
+      margin: { left: margin, right: margin },
+      tableWidth: tableWidth,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [0, 0, 0],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 12,
+        cellPadding: 3,
+      },
+      bodyStyles: {
+        fontSize: 11,
+        cellPadding: 3,
+      },
+      columnStyles,
+      styles: {
+        lineColor: [200, 200, 200],
+        lineWidth: 0.3,
+        overflow: 'linebreak',
+      },
+      // Fila TOTAL en negrita (solo stock_fecha)
+      didParseCell: (data) => {
+        if (tipoReporte === 'stock_fecha' && data.row.index === 1 && data.section === 'body') {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [230, 230, 230];
+        }
+      }
+    });
+
+    // ── RESUMEN (solo Stock a la Fecha) ───────────
+    if (tipoReporte === 'stock_fecha') {
+      const finalY = doc.lastAutoTable.finalY + 8;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('RESUMEN DE INVENTARIO', margin, finalY);
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+      const totalUnidades = Object.values(stockData).reduce((sum, qty) => sum + qty, 0);
+      doc.text(`Total de productos: ${products.length}`, margin, finalY + 6);
+      doc.text(`Total de unidades: ${totalUnidades}`, margin + 60, finalY + 6);
+    }
+
+    // ── GUARDAR ───────────────────────────────────
+    doc.save(`${tituloReporte.replace(/[\s/()]/g, '_')}.pdf`);
+  };
 
   // ============================================
   // FUNCIONES DE CARGA DE DATOS DESDE SUPABASE
@@ -1482,50 +1662,83 @@ const shareOrderViaWhatsApp = (sale) => {
   {/* Reporte 1: STOCK A LA FECHA */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
-      onClick={() => setShowStockModal('stock_fecha')}
-      className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors"
+  className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors"
+>
+  <div className="flex items-center gap-2">
+    <BarChart3 size={20} className="text-blue-600" />
+    <span className="font-bold">STOCK A LA FECHA ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => descargarReportePDF('stock_fecha')}
+      className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
+      title="Descargar PDF"
     >
-      <div className="flex items-center gap-2">
-        <BarChart3 size={20} className="text-blue-600" />
-        <span className="font-bold">STOCK A LA FECHA ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
-      </div>
+      <FileDown size={20} className="text-red-600" />
+    </button>
+    <button
+      onClick={() => setShowStockModal('stock_fecha')}
+      className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
+      title="Ver reporte"
+    >
       <Eye size={20} className="text-gray-600" />
     </button>
+  </div>
+</button>
     
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
-            {products.map(p => (
-              <th key={p.id} className="border p-1.5 text-center font-bold min-w-[90px] text-xs">
-                {p.modelo}
-              </th>
-            ))}
+            {(() => {
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => {
+                const stockA = stockData[a.modelo] || 0;
+                const stockB = stockData[b.modelo] || 0;
+                return stockB - stockA; // Orden descendente
+              });
+              return sortedProducts.map(p => (
+                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                  <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
+                  <span className="hidden md:block">{p.modelo}</span>
+                 </th>
+              ));
+            })()}
           </tr>
         </thead>
         <tbody>
           <tr>
             <td className="border p-1.5 font-medium">{getPeruDateTime().fecha.split('-').reverse().join('/')}</td>
-            {products.map(p => {
+            {(() => {
               const stockData = getStockALaFechaReport();
-              return (
-                <td key={p.id} className="border p-2 text-center font-bold">
-                  {stockData[p.modelo] || 0}
-                </td>
-              );
-            })}
-          </tr>
-          <tr className="bg-gray-50 font-bold">
-            <td className="border p-2">TOTAL</td>
-            {products.map(p => {
-              const stockData = getStockALaFechaReport();
-              return (
+              const sortedProducts = [...products].sort((a, b) => {
+                const stockA = stockData[a.modelo] || 0;
+                const stockB = stockData[b.modelo] || 0;
+                return stockB - stockA;
+              });
+              return sortedProducts.map(p => (
                 <td key={p.id} className="border p-2 text-center">
                   {stockData[p.modelo] || 0}
                 </td>
-              );
-            })}
+              ));
+            })()}
+          </tr>
+          <tr className="bg-gray-50 font-bold">
+            <td className="border p-2">TOTAL</td>
+            {(() => {
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => {
+                const stockA = stockData[a.modelo] || 0;
+                const stockB = stockData[b.modelo] || 0;
+                return stockB - stockA;
+              });
+              return sortedProducts.map(p => (
+                <td key={p.id} className="border p-2 text-center">
+                  {stockData[p.modelo] || 0}
+                </td>
+              ));
+            })()}
           </tr>
         </tbody>
       </table>
@@ -1535,36 +1748,66 @@ const shareOrderViaWhatsApp = (sale) => {
   {/* Reporte 2: INGRESO DE STOCK */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
-      onClick={() => setShowStockModal('ingresos')}
-      className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors"
+  className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors"
+>
+  <div className="flex items-center gap-2">
+    <Package size={20} className="text-green-600" />
+    <span className="font-bold">INGRESO DE STOCK ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => descargarReportePDF('ingresos')}
+      className="p-2 hover:bg-green-200 rounded-lg transition-colors"
+      title="Descargar PDF"
     >
-      <div className="flex items-center gap-2">
-        <Package size={20} className="text-green-600" />
-        <span className="font-bold">INGRESO DE STOCK</span>
-      </div>
+      <FileDown size={20} className="text-red-600" />
+    </button>
+    <button
+      onClick={() => setShowStockModal('ingresos')}
+      className="p-2 hover:bg-green-200 rounded-lg transition-colors"
+      title="Ver reporte"
+    >
       <Eye size={20} className="text-gray-600" />
     </button>
+  </div>
+</button>
     
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
-            {products.map(p => (
-              <th key={p.id} className="border p-1.5 text-center font-bold min-w-[90px] text-xs">
-                {p.modelo}
-              </th>
-            ))}
+            {(() => {
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => {
+                const stockA = stockData[a.modelo] || 0;
+                const stockB = stockData[b.modelo] || 0;
+                return stockB - stockA;
+              });
+              return sortedProducts.map(p => (
+                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                  <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
+                  <span className="hidden md:block">{p.modelo}</span>
+                </th>
+              ));
+            })()}
           </tr>
         </thead>
         <tbody>
           {(() => {
             const ingresoData = getIngresoStockReport();
+            const stockData = getStockALaFechaReport();
+            const sortedProducts = [...products].sort((a, b) => {
+              const stockA = stockData[a.modelo] || 0;
+              const stockB = stockData[b.modelo] || 0;
+              return stockB - stockA;
+            });
+            
             return Object.keys(ingresoData).length > 0 ? (
               Object.entries(ingresoData).map(([fecha, modelos]) => (
                 <tr key={fecha}>
                   <td className="border p-1.5 font-medium">{fecha.split('-').reverse().join('/')}</td>
-                  {products.map(p => (
+                  {sortedProducts.map(p => (
                     <td key={p.id} className="border p-1.5 text-center">
                       {modelos[p.modelo] || '-'}
                     </td>
@@ -1587,36 +1830,66 @@ const shareOrderViaWhatsApp = (sale) => {
   {/* Reporte 3: SALIDA (VENTAS) */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
-      onClick={() => setShowStockModal('salidas')}
-      className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors"
+  className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors"
+>
+  <div className="flex items-center gap-2">
+    <ShoppingCart size={20} className="text-red-600" />
+    <span className="font-bold">SALIDA - VENTAS ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => descargarReportePDF('salidas')}
+      className="p-2 hover:bg-red-200 rounded-lg transition-colors"
+      title="Descargar PDF"
     >
-      <div className="flex items-center gap-2">
-        <ShoppingCart size={20} className="text-red-600" />
-        <span className="font-bold">SALIDA (VENTAS)</span>
-      </div>
+      <FileDown size={20} className="text-red-600" />
+    </button>
+    <button
+      onClick={() => setShowStockModal('salidas')}
+      className="p-2 hover:bg-red-200 rounded-lg transition-colors"
+      title="Ver reporte"
+    >
       <Eye size={20} className="text-gray-600" />
     </button>
+  </div>
+</button>
     
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
-            {products.map(p => (
-              <th key={p.id} className="border p-1.5 text-center font-bold min-w-[90px] text-xs">
-                {p.modelo}
-              </th>
-            ))}
+            {(() => {
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => {
+                const stockA = stockData[a.modelo] || 0;
+                const stockB = stockData[b.modelo] || 0;
+                return stockB - stockA;
+              });
+              return sortedProducts.map(p => (
+                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                  <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
+                  <span className="hidden md:block">{p.modelo}</span>
+                </th>
+              ));
+            })()}
           </tr>
         </thead>
         <tbody>
           {(() => {
             const salidaData = getSalidaVentasReport();
+            const stockData = getStockALaFechaReport();
+            const sortedProducts = [...products].sort((a, b) => {
+              const stockA = stockData[a.modelo] || 0;
+              const stockB = stockData[b.modelo] || 0;
+              return stockB - stockA;
+            });
+            
             return Object.keys(salidaData).length > 0 ? (
               Object.entries(salidaData).map(([fecha, modelos]) => (
                 <tr key={fecha}>
                   <td className="border p-1.5 font-medium">{fecha.split('-').reverse().join('/')}</td>
-                  {products.map(p => (
+                  {sortedProducts.map(p => (
                     <td key={p.id} className="border p-1.5 text-center">
                       {modelos[p.modelo] || '0'}
                     </td>
@@ -1637,116 +1910,210 @@ const shareOrderViaWhatsApp = (sale) => {
   </div>
 </div>
 
-{/* MODAL: Vista ampliada de reportes */}
+{/* MODAL: Vista ampliada de reportes - FORMATO PROFESIONAL RESPONSIVE */}
 {showStockModal && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-2xl p-3 max-w-[95vw] w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-      <div className="flex items-center justify-between mb-2 sticky top-0 bg-white pb-2 border-b">
-        <h2 className="text-sm font-bold">
-          {showStockModal === 'stock_fecha' && `📊 Stock a la Fecha (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
-          {showStockModal === 'ingresos' && '📦 Ingreso de Stock'}
-          {showStockModal === 'salidas' && '🛒 Salida (Ventas)'}
-        </h2>
-        <button onClick={() => setShowStockModal(null)} className="p-2 hover:bg-gray-100 rounded-lg">
-          <X size={20} />
-        </button>
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
+    <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+      
+      {/* HEADER DEL DOCUMENTO */}
+      <div className="bg-black text-white p-3 md:p-6 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg md:text-2xl font-bold">ABermud</h1>
+            <p className="text-xs md:text-sm italic">Lo bueno va contigo</p>
+            <p className="text-[10px] md:text-xs mt-1 md:mt-2 opacity-90">
+              {showStockModal === 'stock_fecha' && 'Reporte de Stock a la fecha'}
+              {showStockModal === 'ingresos' && 'Reporte de Ingreso de Stock'}
+              {showStockModal === 'salidas' && 'Reporte de Salida (Ventas)'}
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowStockModal(null)} 
+            className="p-1.5 md:p-2 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <X size={20} className="md:hidden" />
+            <X size={24} className="hidden md:block" />
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-1.5 text-left font-bold sticky left-0 bg-gray-100 z-10">FECHA</th>
-              {products.map(p => (
-                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[100px]">
-                  {p.modelo}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {showStockModal === 'stock_fecha' && (
-              <>
-                <tr>
-                  <td className="border p-1.5 font-medium sticky left-0 bg-white z-10">
-                    {getPeruDateTime().fecha.split('-').reverse().join('/')}
-                  </td>
-                  {products.map(p => {
-                    const stockData = getStockALaFechaReport();
-                    return (
-                      <td key={p.id} className="border p-1.5 text-center font-bold text-sm">
-                        {stockData[p.modelo] || 0}
-                      </td>
-                    );
-                  })}
-                </tr>
-                <tr className="bg-gray-50 font-bold">
-                  <td className="border p-3 sticky left-0 bg-gray-50 z-10">TOTAL</td>
-                  {products.map(p => {
-                    const stockData = getStockALaFechaReport();
-                    return (
-                      <td key={p.id} className="border p-3 text-center text-lg">
-                        {stockData[p.modelo] || 0}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </>
-            )}
+      {/* CONTENIDO DEL DOCUMENTO */}
+      <div className="flex-1 overflow-auto p-3 md:p-6 bg-gray-50">
+        <div className="bg-white rounded-lg p-3 md:p-6 shadow-sm">
+          {/* Fecha del reporte */}
+          <div className="mb-3 md:mb-4 pb-2 md:pb-3 border-b">
+            <p className="text-xs md:text-sm text-gray-600">
+              <span className="font-semibold">Fecha:</span> {getPeruDateTime().fecha.split('-').reverse().join('/')}
+            </p>
+          </div>
 
-            {showStockModal === 'ingresos' && (
-              (() => {
-                const ingresoData = getIngresoStockReport();
-                return Object.keys(ingresoData).length > 0 ? (
-                  Object.entries(ingresoData).map(([fecha, modelos]) => (
-                    <tr key={fecha}>
-                      <td className="border p-1.5 font-medium sticky left-0 bg-white z-10">
-                        {fecha.split('-').reverse().join('/')}
-                      </td>
-                      {products.map(p => (
-                        <td key={p.id} className="border p-1.5 text-center text-sm">
-                          {modelos[p.modelo] || '-'}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={products.length + 1} className="border p-8 text-center text-gray-500">
-                      No hay ingresos en este período
-                    </td>
-                  </tr>
-                );
-              })()
-            )}
+          {/* TÍTULO DEL REPORTE */}
+          <h2 className="text-sm md:text-xl font-bold mb-3 md:mb-4 uppercase">
+            {showStockModal === 'stock_fecha' && `Stock a la Fecha (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
+            {showStockModal === 'ingresos' && `Ingreso de Stock (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
+            {showStockModal === 'salidas' && `Salida - Ventas (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
+          </h2>
 
-            {showStockModal === 'salidas' && (
-              (() => {
-                const salidaData = getSalidaVentasReport();
-                return Object.keys(salidaData).length > 0 ? (
-                  Object.entries(salidaData).map(([fecha, modelos]) => (
-                    <tr key={fecha}>
-                      <td className="border p-1.5 font-medium sticky left-0 bg-white z-10">
-                        {fecha.split('-').reverse().join('/')}
+          {/* TABLA DEL REPORTE */}
+          <div className="overflow-x-auto -mx-3 md:mx-0">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-black text-white">
+                  <th className="border border-gray-300 p-1 md:p-2 text-left font-bold sticky left-0 bg-black z-10 text-[8px] md:text-sm min-w-[60px] md:min-w-[80px]">
+                    FECHA
+                  </th>
+                  {(() => {
+                    const stockData = getStockALaFechaReport();
+                    const sortedProducts = [...products].sort((a, b) => {
+                      const stockA = stockData[a.modelo] || 0;
+                      const stockB = stockData[b.modelo] || 0;
+                      return stockB - stockA;
+                    });
+                    return sortedProducts.map(p => (
+                      <th key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold min-w-[50px] md:min-w-[100px] text-[9px] md:text-sm">
+                        <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
+                        <span className="hidden md:block">{p.modelo}</span>
+                      </th>
+                    ));
+                  })()}
+                </tr>
+              </thead>
+              <tbody>
+                {/* STOCK A LA FECHA */}
+                {showStockModal === 'stock_fecha' && (
+                  <>
+                    <tr className="even:bg-gray-50">
+                      <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+                        {getPeruDateTime().fecha.split('-').reverse().join('/')}
                       </td>
-                      {products.map(p => (
-                        <td key={p.id} className="border p-1.5 text-center text-sm">
-                          {modelos[p.modelo] || '0'}
-                        </td>
-                      ))}
+                      {(() => {
+                        const stockData = getStockALaFechaReport();
+                        const sortedProducts = [...products].sort((a, b) => {
+                          const stockA = stockData[a.modelo] || 0;
+                          const stockB = stockData[b.modelo] || 0;
+                          return stockB - stockA;
+                        });
+                        return sortedProducts.map(p => (
+                          <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-sm md:text-sm">
+                            {stockData[p.modelo] || 0}
+                          </td>
+                        ));
+                      })()}
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={products.length + 1} className="border p-8 text-center text-gray-500">
-                      No hay ventas en este período
-                    </td>
-                  </tr>
-                );
-              })()
-            )}
-          </tbody>
-        </table>
+                    <tr className="bg-gray-200 font-bold">
+                      <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">
+                        TOTAL
+                      </td>
+                      {(() => {
+                        const stockData = getStockALaFechaReport();
+                        const sortedProducts = [...products].sort((a, b) => {
+                          const stockA = stockData[a.modelo] || 0;
+                          const stockB = stockData[b.modelo] || 0;
+                          return stockB - stockA;
+                        });
+                        return sortedProducts.map(p => (
+                          <td key={p.id} className="border border-gray-300 p-1 md:p- text-center text-sm md:text-lg">
+                            {stockData[p.modelo] || 0}
+                          </td>
+                        ));
+                      })()}
+                    </tr>
+                  </>
+                )}
+
+                {/* INGRESO DE STOCK */}
+                {showStockModal === 'ingresos' && (
+                  (() => {
+                    const ingresoData = getIngresoStockReport();
+                    const stockData = getStockALaFechaReport();
+                    const sortedProducts = [...products].sort((a, b) => {
+                      const stockA = stockData[a.modelo] || 0;
+                      const stockB = stockData[b.modelo] || 0;
+                      return stockB - stockA;
+                    });
+                    
+                    return Object.keys(ingresoData).length > 0 ? (
+                      Object.entries(ingresoData).map(([fecha, modelos]) => (
+                        <tr key={fecha} className="even:bg-gray-50">
+                          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+                            {fecha.split('-').reverse().join('/')}
+                          </td>
+                          {sortedProducts.map(p => (
+                            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-xs">
+                              {modelos[p.modelo] || '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
+                          No hay ingresos en este período
+                        </td>
+                      </tr>
+                    );
+                  })()
+                )}
+
+                {/* SALIDA - VENTAS */}
+                {showStockModal === 'salidas' && (
+                  (() => {
+                    const salidaData = getSalidaVentasReport();
+                    const stockData = getStockALaFechaReport();
+                    const sortedProducts = [...products].sort((a, b) => {
+                      const stockA = stockData[a.modelo] || 0;
+                      const stockB = stockData[b.modelo] || 0;
+                      return stockB - stockA;
+                    });
+                    
+                    return Object.keys(salidaData).length > 0 ? (
+                      Object.entries(salidaData).map(([fecha, modelos]) => (
+                        <tr key={fecha} className="even:bg-gray-50">
+                          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+                            {fecha.split('-').reverse().join('/')}
+                          </td>
+                          {sortedProducts.map(p => (
+                            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+                              {modelos[p.modelo] || '0'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
+                          No hay ventas en este período
+                        </td>
+                      </tr>
+                    );
+                  })()
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* RESUMEN (solo para Stock a la Fecha) */}
+          {showStockModal === 'stock_fecha' && (
+            <div className="mt-4 md:mt-6 p-3 md:p-4 bg-gray-100 rounded-lg">
+              <h3 className="font-bold text-xs md:text-sm uppercase mb-2">Resumen de Inventario</h3>
+              <div className="grid grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
+                <div>
+                  <span className="text-gray-600">Total de productos:</span>
+                  <span className="ml-2 font-bold">{products.length}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Total de unidades:</span>
+                  <span className="ml-2 font-bold">
+                    {(() => {
+                      const stockData = getStockALaFechaReport();
+                      return Object.values(stockData).reduce((sum, qty) => sum + qty, 0);
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   </div>
