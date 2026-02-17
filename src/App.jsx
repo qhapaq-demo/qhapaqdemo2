@@ -187,6 +187,12 @@ function App() {
           f.split('-').reverse().join('/'),
           ...sortedProducts.map(p => String(modelos[p.modelo] || '-'))
         ]);
+        bodyData.push([
+          'TOTAL',
+          ...sortedProducts.map(p => String(
+            Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)
+          ))
+        ]);
       }
     } else if (tipoReporte === 'salidas') {
       const salidaData = getSalidaVentasReport();
@@ -196,6 +202,12 @@ function App() {
         bodyData = Object.entries(salidaData).map(([f, modelos]) => [
           f.split('-').reverse().join('/'),
           ...sortedProducts.map(p => String(modelos[p.modelo] || '0'))
+        ]);
+        bodyData.push([
+          'TOTAL',
+          ...sortedProducts.map(p => String(
+            Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)
+          ))
         ]);
       }
     }
@@ -1821,7 +1833,20 @@ const shareOrderViaWhatsApp = (sale) => {
                 </td>
               </tr>
             );
-          })()}
+          })()}          
+          <tr className="bg-gray-50 font-bold">
+            <td className="border p-2">TOTAL</td>
+            {(() => {
+              const ingresoData = getIngresoStockReport();
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+              return sortedProducts.map(p => (
+                <td key={p.id} className="border p-2 text-center">
+                  {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                </td>
+              ));
+            })()}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -1904,6 +1929,19 @@ const shareOrderViaWhatsApp = (sale) => {
               </tr>
             );
           })()}
+          <tr className="bg-gray-50 font-bold">
+            <td className="border p-2">TOTAL</td>
+            {(() => {
+              const salidaData = getSalidaVentasReport();
+              const stockData = getStockALaFechaReport();
+              const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+              return sortedProducts.map(p => (
+                <td key={p.id} className="border p-2 text-center">
+                  {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                </td>
+              ));
+            })()}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -2054,6 +2092,19 @@ const shareOrderViaWhatsApp = (sale) => {
                     );
                   })()
                 )}
+                <tr className="bg-gray-200 font-bold">
+                  <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
+                  {(() => {
+                    const ingresoData = getIngresoStockReport();
+                    const stockData = getStockALaFechaReport();
+                    const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+                    return sortedProducts.map(p => (
+                      <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+                        {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                      </td>
+                    ));
+                  })()}
+                </tr>
 
                 {/* SALIDA - VENTAS */}
                 {showStockModal === 'salidas' && (
@@ -2088,6 +2139,21 @@ const shareOrderViaWhatsApp = (sale) => {
                     );
                   })()
                 )}
+                {showStockModal === 'salidas' && (() => {
+                  const salidaData = getSalidaVentasReport();
+                  const stockData = getStockALaFechaReport();
+                  const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+                  return Object.keys(salidaData).length > 0 ? (
+                    <tr className="bg-gray-200 font-bold">
+                      <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
+                      {sortedProducts.map(p => (
+                        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+                          {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                        </td>
+                      ))}
+                    </tr>
+                  ) : null;
+                })()}
               </tbody>
             </table>
           </div>
