@@ -2983,7 +2983,7 @@ const shareOrderViaWhatsApp = (sale) => {
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
                 >
                   <option value="">-- Seleccionar --</option>
-                  {products.map(p => (
+                  {products.filter(p => p.activo !== false).map(p => (
                     <option key={p.id} value={p.modelo}>{p.modelo}</option>
                   ))}
                 </select>
