@@ -126,7 +126,7 @@ function App() {
     return resultado;
   };
 
-// ============================================
+  // ============================================
   // FUNCIÓN PARA DESCARGAR REPORTE EN PDF
   // ============================================
   const descargarReportePDF = (tipoReporte) => {
@@ -155,9 +155,9 @@ function App() {
 
     // ── TÍTULO DEL REPORTE ────────────────────────
     let tituloReporte = '';
-    if (tipoReporte === 'stock_fecha')  tituloReporte = `STOCK A LA FECHA (${fecha})`;
-    if (tipoReporte === 'ingresos')     tituloReporte = `INGRESO DE STOCK (${fecha})`;
-    if (tipoReporte === 'salidas')      tituloReporte = `SALIDA - VENTAS (${fecha})`;
+    if (tipoReporte === 'stock acumulado')  tituloReporte = `STOCK ACUMULADO AL ${fecha}`;
+    if (tipoReporte === 'movimientos')     tituloReporte = `MOVIMIENTOS DE STOCK AL ${fecha}`;
+    if (tipoReporte === 'salidas')      tituloReporte = `SALIDA - VENTAS AL ${fecha}`;
 
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(16);
@@ -176,9 +176,8 @@ function App() {
     if (tipoReporte === 'stock_fecha') {
       bodyData = [
         [fecha, ...sortedProducts.map(p => String(stockData[p.modelo] || 0))],
-        ['TOTAL', ...sortedProducts.map(p => String(stockData[p.modelo] || 0))]
       ];
-    } else if (tipoReporte === 'ingresos') {
+    } else if (tipoReporte === 'movimientos') {
       const ingresoData = getIngresoStockReport();
       if (Object.keys(ingresoData).length === 0) {
         bodyData = [['Sin ingresos en este período', ...sortedProducts.map(() => '')]];
@@ -436,24 +435,38 @@ useEffect(() => {
   };
 
   const deleteProduct = async (productId) => {
-    if (!confirm('¿Seguro que deseas eliminar este producto?')) return;
+  if (!confirm('¿Seguro que deseas eliminar este producto?')) return;
 
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId);
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', productId);
 
-    if (error) {
-      console.error('Error eliminando producto:', error);
-      alert('Error al eliminar producto');
-    }
-  };
+  if (error) {
+    console.error('Error eliminando producto:', error);
+    alert('Error al eliminar producto');
+  }
+};
 
-  const addColorToProduct = (productObj) => {
-    if (!newColorInput.trim()) return;
-    
-    const updatedColors = [...(productObj.colors || []), newColorInput.trim()];
-    const updatedStock = { ...(productObj.stock || {}) };
+const toggleProductActive = async (id, currentStatus) => {
+  const { error } = await supabase
+    .from('products')
+    .update({ activo: !currentStatus })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error cambiando estado del producto:', error);
+    alert('Error al cambiar estado del producto');
+  } else {
+    alert(`Producto ${!currentStatus ? 'activado' : 'desactivado'} exitosamente`);
+  }
+};
+
+const addColorToProduct = (productObj) => {
+  if (!newColorInput.trim()) return;
+  
+  const updatedColors = [...(productObj.colors || []), newColorInput.trim()];
+  const updatedStock = { ...(productObj.stock || {}) };
     
     // Inicializar stock del nuevo color en 0 para todas las tallas
     updatedStock[newColorInput.trim()] = { S: 0, M: 0, L: 0, XL: 0 };
@@ -1545,7 +1558,25 @@ const shareOrderViaWhatsApp = (sale) => {
 
             {/* Products Grid */}
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {filteredProducts.map(product => {
+  {[...filteredProducts]
+  .sort((a, b) => {
+    const getTotalStock = (product) => {
+      let total = 0;
+      Object.values(product.stock || {}).forEach(tallas => {
+        Object.values(tallas).forEach(cantidad => total += cantidad);
+        });
+      return total;
+    };
+
+    // 1️⃣ Activos primero
+    if (a.activo !== b.activo) {
+      return a.activo ? -1 : 1;
+    }
+
+    // 2️⃣ Mayor stock primero
+    return getTotalStock(b) - getTotalStock(a);
+  })
+  .map(product => {
     let totalStock = 0;
     Object.values(product.stock || {}).forEach(tallas => {
       Object.values(tallas).forEach(cantidad => totalStock += cantidad);
@@ -1580,14 +1611,27 @@ const shareOrderViaWhatsApp = (sale) => {
                 <button
                   onClick={() => setEditingProduct(product)}
                   className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Editar"
                 >
                   <Edit2 size={16} />
                 </button>
                 <button
                   onClick={() => deleteProduct(product.id)}
                   className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
+                  title="Eliminar"
                 >
                   <Trash2 size={16} />
+                </button>
+                <button
+                  onClick={() => toggleProductActive(product.id, product.activo)}
+                  className={`p-2 rounded-lg ${
+                    product.activo 
+                      ? 'hover:bg-green-50 text-green-600' 
+                      : 'hover:bg-gray-100 text-red-600'
+                  }`}
+                  title={product.activo ? 'Producto Activo - Click para desactivar' : 'Producto Inactivo - Click para activar'}
+                >
+                  {product.activo ? '✓' : 'X'}
                 </button>
               </div>
             </div>
@@ -1671,14 +1715,14 @@ const shareOrderViaWhatsApp = (sale) => {
     </div>
   </div>
 
-  {/* Reporte 1: STOCK A LA FECHA */}
+  {/* Reporte 1: STOCK ACUMULADO */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
   className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors"
 >
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2 flex-1">
     <BarChart3 size={20} className="text-blue-600" />
-    <span className="font-bold">STOCK A LA FECHA ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+    <span className="font-bold text-left text-sm md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
   </div>
   <div className="flex items-center gap-2">
     <button
@@ -1711,7 +1755,7 @@ const shareOrderViaWhatsApp = (sale) => {
                 return stockB - stockA; // Orden descendente
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                <th key={p.id} className="border p-1.5 text-left font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                  </th>
@@ -1736,46 +1780,30 @@ const shareOrderViaWhatsApp = (sale) => {
               ));
             })()}
           </tr>
-          <tr className="bg-gray-50 font-bold">
-            <td className="border p-2">TOTAL</td>
-            {(() => {
-              const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => {
-                const stockA = stockData[a.modelo] || 0;
-                const stockB = stockData[b.modelo] || 0;
-                return stockB - stockA;
-              });
-              return sortedProducts.map(p => (
-                <td key={p.id} className="border p-2 text-center">
-                  {stockData[p.modelo] || 0}
-                </td>
-              ));
-            })()}
-          </tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  {/* Reporte 2: INGRESO DE STOCK */}
+  {/* Reporte 2: MOVIMIENTOS DE STOCK */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
   className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors"
 >
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2 flex-1">
     <Package size={20} className="text-green-600" />
-    <span className="font-bold">INGRESO DE STOCK ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+    <span className="font-bold text-left text-sm md:text-base">MOVIMIENTOS DE STOCK AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
   </div>
   <div className="flex items-center gap-2">
     <button
-      onClick={() => descargarReportePDF('ingresos')}
+      onClick={() => descargarReportePDF('movimientos')}
       className="p-2 hover:bg-green-200 rounded-lg transition-colors"
       title="Descargar PDF"
     >
       <FileDown size={20} className="text-red-600" />
     </button>
     <button
-      onClick={() => setShowStockModal('ingresos')}
+      onClick={() => setShowStockModal('movimientos')}
       className="p-2 hover:bg-green-200 rounded-lg transition-colors"
       title="Ver reporte"
     >
@@ -1797,7 +1825,7 @@ const shareOrderViaWhatsApp = (sale) => {
                 return stockB - stockA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                <th key={p.id} className="border p-1.5 text-left font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -1852,14 +1880,14 @@ const shareOrderViaWhatsApp = (sale) => {
     </div>
   </div>
 
-  {/* Reporte 3: SALIDA (VENTAS) */}
+  {/* Reporte 3: SALIDA - VENTAS */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
     <button
   className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors"
 >
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2 flex-1">
     <ShoppingCart size={20} className="text-red-600" />
-    <span className="font-bold">SALIDA - VENTAS ({getPeruDateTime().fecha.split('-').reverse().join('/')})</span>
+    <span className="font-bold text-left text-sm md:text-base">SALIDA - VENTAS AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
   </div>
   <div className="flex items-center gap-2">
     <button
@@ -1960,8 +1988,8 @@ const shareOrderViaWhatsApp = (sale) => {
             <h1 className="text-lg md:text-2xl font-bold">ABermud</h1>
             <p className="text-xs md:text-sm italic">Lo bueno va contigo</p>
             <p className="text-[10px] md:text-xs mt-1 md:mt-2 opacity-90">
-              {showStockModal === 'stock_fecha' && 'Reporte de Stock a la fecha'}
-              {showStockModal === 'ingresos' && 'Reporte de Ingreso de Stock'}
+              {showStockModal === 'stock_fecha' && 'Reporte de Stock Acumulado'}
+              {showStockModal === 'movimientos' && 'Reporte de Movimientos de Stock'}
               {showStockModal === 'salidas' && 'Reporte de Salida (Ventas)'}
             </p>
           </div>
@@ -1986,11 +2014,27 @@ const shareOrderViaWhatsApp = (sale) => {
           </div>
 
           {/* TÍTULO DEL REPORTE */}
-          <h2 className="text-sm md:text-xl font-bold mb-3 md:mb-4 uppercase">
-            {showStockModal === 'stock_fecha' && `Stock a la Fecha (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
-            {showStockModal === 'ingresos' && `Ingreso de Stock (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
-            {showStockModal === 'salidas' && `Salida - Ventas (${getPeruDateTime().fecha.split('-').reverse().join('/')})`}
-          </h2>
+<div className="mb-3 md:mb-4">
+  <h2 className="text-sm md:text-xl font-bold uppercase">
+    {showStockModal === 'stock_fecha' && 
+      `Stock Acumulado al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
+    }
+
+    {showStockModal === 'movimientos' && 
+      `Movimientos de Stock al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
+    }
+
+    {showStockModal === 'salidas' && 
+      `Salidas - Ventas al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
+    }
+  </h2>
+
+  {reportFilter === 'personalizado' && showStockModal !== 'stock_fecha' && (
+    <p className="text-xs md:text-sm text-gray-600 mt-1">
+      Filtrado: {customDateRange.start.split('-').reverse().join('/')} - {customDateRange.end.split('-').reverse().join('/')}
+    </p>
+  )}
+</div>
 
           {/* TABLA DEL REPORTE */}
           <div className="overflow-x-auto -mx-3 md:mx-0">
@@ -2017,50 +2061,36 @@ const shareOrderViaWhatsApp = (sale) => {
                 </tr>
               </thead>
               <tbody>
-                {/* STOCK A LA FECHA */}
-                {showStockModal === 'stock_fecha' && (
-                  <>
-                    <tr className="even:bg-gray-50">
-                      <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-                        {getPeruDateTime().fecha.split('-').reverse().join('/')}
-                      </td>
-                      {(() => {
-                        const stockData = getStockALaFechaReport();
-                        const sortedProducts = [...products].sort((a, b) => {
-                          const stockA = stockData[a.modelo] || 0;
-                          const stockB = stockData[b.modelo] || 0;
-                          return stockB - stockA;
-                        });
-                        return sortedProducts.map(p => (
-                          <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-sm md:text-sm">
-                            {stockData[p.modelo] || 0}
-                          </td>
-                        ));
-                      })()}
-                    </tr>
-                    <tr className="bg-gray-200 font-bold">
-                      <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">
-                        TOTAL
-                      </td>
-                      {(() => {
-                        const stockData = getStockALaFechaReport();
-                        const sortedProducts = [...products].sort((a, b) => {
-                          const stockA = stockData[a.modelo] || 0;
-                          const stockB = stockData[b.modelo] || 0;
-                          return stockB - stockA;
-                        });
-                        return sortedProducts.map(p => (
-                          <td key={p.id} className="border border-gray-300 p-1 md:p- text-center text-sm md:text-lg">
-                            {stockData[p.modelo] || 0}
-                          </td>
-                        ));
-                      })()}
-                    </tr>
-                  </>
-                )}
 
-                {/* INGRESO DE STOCK */}
-                {showStockModal === 'ingresos' && (
+                {/* STOCK ACUMULADO */}
+{showStockModal === 'stock_fecha' && (
+  <>
+    <tr className="even:bg-gray-50">
+      <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+        {getPeruDateTime().fecha.split('-').reverse().join('/')}
+      </td>
+      {(() => {
+        const stockData = getStockALaFechaReport();
+        const sortedProducts = [...products].sort((a, b) => {
+          const stockA = stockData[a.modelo] || 0;
+          const stockB = stockData[b.modelo] || 0;
+          return stockB - stockA;
+        });
+        return sortedProducts.map(p => (
+          <td
+            key={p.id}
+            className="border border-gray-300 p-1 md:p-2 text-center font-bold text-sm md:text-sm"
+          >
+            {stockData[p.modelo] || 0}
+          </td>
+        ));
+      })()}
+    </tr>
+  </>
+)}
+
+                {/* MOVIMIENTOS DE STOCK */}
+                {showStockModal === 'movimientos' && (
                   (() => {
                     const ingresoData = getIngresoStockReport();
                     const stockData = getStockALaFechaReport();
@@ -2092,19 +2122,21 @@ const shareOrderViaWhatsApp = (sale) => {
                     );
                   })()
                 )}
-                <tr className="bg-gray-200 font-bold">
-                  <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
-                  {(() => {
-                    const ingresoData = getIngresoStockReport();
-                    const stockData = getStockALaFechaReport();
-                    const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
-                    return sortedProducts.map(p => (
-                      <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
-                        {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
-                      </td>
-                    ));
-                  })()}
-                </tr>
+                {showStockModal === 'movimientos' && (
+                  <tr className="bg-gray-200 font-bold">
+                    <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
+                    {(() => {
+                      const ingresoData = getIngresoStockReport();
+                      const stockData = getStockALaFechaReport();
+                      const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+                      return sortedProducts.map(p => (
+                        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+                          {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                        </td>
+                      ));
+                    })()}
+                  </tr>
+                )}
 
                 {/* SALIDA - VENTAS */}
                 {showStockModal === 'salidas' && (
@@ -2271,7 +2303,7 @@ const shareOrderViaWhatsApp = (sale) => {
           </div>
         )}
 
-       {/* ============================================ */}
+{/* ============================================ */}
 {/* TAB: VENTAS */}
 {/* ============================================ */}
 {activeTab === 'ventas' && (
@@ -3187,45 +3219,79 @@ const shareOrderViaWhatsApp = (sale) => {
           </div>
 
           {/* Si NO hay producto seleccionado: Mostrar lista */}
-          {!selectedProductModel && (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {products
-                .filter(p => p.modelo.toLowerCase().includes(productSearchTerm.toLowerCase()))
-                .map(product => {
-                  // Calcular stock total
-                  let totalStock = 0;
-                  Object.values(product.stock || {}).forEach(tallas => {
-                    Object.values(tallas).forEach(cantidad => totalStock += cantidad);
-                  });
+{!selectedProductModel && (
+  <div className="space-y-3 max-h-96 overflow-y-auto">
+    {[...products]
+      .filter(product => {
+        // Buscar por modelo
+        const matchesSearch = product.modelo
+          .toLowerCase()
+          .includes(productSearchTerm.toLowerCase());
 
-                  return (
-                    <div key={product.id} className="border rounded-lg p-3 hover:border-black transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelectedProductModel(product.modelo);
-                        setProductSearchTerm('');
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        {product.imagen && (
-                          <img 
-                            src={product.imagen} 
-                            alt={product.modelo} 
-                            className="w-14 h-14 object-contain rounded flex-shrink-0 bg-gray-50"
-                          />
-                        )}
-                        <div className="text-left flex-1">
-                          <p className="text-base font-medium">{product.modelo}</p>
-                          <p className="text-sm text-emerald-600">
-                            S/ {product.precio_venta} - Stock: {totalStock}
-                          </p>
-                        </div>
-                        <ChevronRight size={20} className="text-gray-400" />
-                      </div>
-                    </div>
-                  );
-                })}
+        // Calcular stock total
+        let totalStock = 0;
+        Object.values(product.stock || {}).forEach(tallas => {
+          Object.values(tallas).forEach(cantidad => {
+            totalStock += cantidad;
+          });
+        });
+
+        return product.activo && matchesSearch && totalStock > 0;
+      })
+      .sort((a, b) => {
+        const getTotalStock = (product) => {
+          let total = 0;
+          Object.values(product.stock || {}).forEach(tallas => {
+            Object.values(tallas).forEach(cantidad => {
+              total += cantidad;
+            });
+          });
+          return total;
+        };
+
+        return getTotalStock(b) - getTotalStock(a);
+      })
+      .map(product => {
+        // Calcular stock total nuevamente para mostrar
+        let totalStock = 0;
+        Object.values(product.stock || {}).forEach(tallas => {
+          Object.values(tallas).forEach(cantidad => {
+            totalStock += cantidad;
+          });
+        });
+
+        return (
+          <div
+            key={product.id}
+            className="border rounded-lg p-3 hover:border-black transition-colors cursor-pointer"
+            onClick={() => {
+              setSelectedProductModel(product.modelo);
+              setProductSearchTerm('');
+            }}
+          >
+            <div className="flex items-center gap-3">
+              {product.imagen && (
+                <img
+                  src={product.imagen}
+                  alt={product.modelo}
+                  className="w-14 h-14 object-contain rounded flex-shrink-0 bg-gray-50"
+                />
+              )}
+
+              <div className="text-left flex-1">
+                <p className="text-base font-medium">{product.modelo}</p>
+                <p className="text-sm text-emerald-600">
+                  S/ {product.precio_venta} - Stock: {totalStock}
+                </p>
+              </div>
+
+              <ChevronRight size={20} className="text-gray-400" />
             </div>
-          )}
+          </div>
+        );
+      })}
+  </div>
+)}
 
           {/* Si HAY producto seleccionado: Mostrar tabla de colores/tallas */}
           {selectedProductModel && (() => {
