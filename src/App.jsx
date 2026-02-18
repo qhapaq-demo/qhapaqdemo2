@@ -1725,13 +1725,7 @@ const shareOrderViaWhatsApp = (sale) => {
     <span className="font-bold text-left text-sm md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
   </div>
   <div className="flex items-center gap-2">
-    <button
-      onClick={() => descargarReportePDF('stock_fecha')}
-      className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
-      title="Descargar PDF"
-    >
-      <FileDown size={20} className="text-red-600" />
-    </button>
+    
     <button
       onClick={() => setShowStockModal('stock_fecha')}
       className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
@@ -1746,7 +1740,7 @@ const shareOrderViaWhatsApp = (sale) => {
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
+            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].sort((a, b) => {
@@ -1765,7 +1759,7 @@ const shareOrderViaWhatsApp = (sale) => {
         </thead>
         <tbody>
           <tr>
-            <td className="border p-1.5 font-medium">{getPeruDateTime().fecha.split('-').reverse().join('/')}</td>
+            <td className="border p-1 font-medium">{getPeruDateTime().fecha.split('-').reverse().join('/')}</td>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].sort((a, b) => {
@@ -1816,7 +1810,7 @@ const shareOrderViaWhatsApp = (sale) => {
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
+            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].sort((a, b) => {
@@ -1846,7 +1840,7 @@ const shareOrderViaWhatsApp = (sale) => {
             return Object.keys(ingresoData).length > 0 ? (
               Object.entries(ingresoData).map(([fecha, modelos]) => (
                 <tr key={fecha}>
-                  <td className="border p-1.5 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                  <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
                   {sortedProducts.map(p => (
                     <td key={p.id} className="border p-1.5 text-center">
                       {modelos[p.modelo] || '-'}
@@ -1911,7 +1905,7 @@ const shareOrderViaWhatsApp = (sale) => {
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[80px]">FECHA</th>
+            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].sort((a, b) => {
@@ -1941,7 +1935,7 @@ const shareOrderViaWhatsApp = (sale) => {
             return Object.keys(salidaData).length > 0 ? (
               Object.entries(salidaData).map(([fecha, modelos]) => (
                 <tr key={fecha}>
-                  <td className="border p-1.5 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                  <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
                   {sortedProducts.map(p => (
                     <td key={p.id} className="border p-1.5 text-center">
                       {modelos[p.modelo] || '0'}
@@ -2495,7 +2489,7 @@ const shareOrderViaWhatsApp = (sale) => {
                         <tbody>
                           {Object.entries(productData.stockByColor).map(([color, tallas]) => (
                             <tr key={color}>
-                              <td className="border p-1.5 font-medium">{color}</td>
+                              <td className="border p-1 font-medium">{color}</td>
                               {['S', 'M', 'L'].map(talla => {
                                 const cantidad = tallas[talla] || 0;
                                 const bgColor = cantidad > 20 ? 'bg-green-100' : cantidad >= 10 ? 'bg-yellow-100' : 'bg-red-100';
