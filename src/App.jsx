@@ -3401,25 +3401,36 @@ const shareOrderViaWhatsApp = (sale) => {
                   </button>
                   <button
   onClick={() => {
-    const newItems = [];
+    const updatedCart = [...cart];
     Object.entries(colorQuantities).forEach(([key, qty]) => {
       if (qty && parseInt(qty) > 0) {
         const [color, talla] = key.split('-');
         const stockDisponible = product.stock?.[color]?.[talla] || 0;
         if (parseInt(qty) <= stockDisponible) {
-          newItems.push({
-            productoId: product.id,
-            modelo: product.modelo,
-            color,
-            talla,
-            quantity: parseInt(qty),
-            precioVenta: product.precio_venta,
-            subtotal: product.precio_venta * parseInt(qty)
-          });
+          const existingIndex = updatedCart.findIndex(
+            item => item.productoId === product.id && item.color === color && item.talla === talla
+          );
+          if (existingIndex >= 0) {
+            updatedCart[existingIndex] = {
+              ...updatedCart[existingIndex],
+              quantity: updatedCart[existingIndex].quantity + parseInt(qty),
+              subtotal: product.precio_venta * (updatedCart[existingIndex].quantity + parseInt(qty))
+            };
+          } else {
+            updatedCart.push({
+              productoId: product.id,
+              modelo: product.modelo,
+              color,
+              talla,
+              quantity: parseInt(qty),
+              precioVenta: product.precio_venta,
+              subtotal: product.precio_venta * parseInt(qty)
+            });
+          }
         }
       }
     });
-    setCart([...cart, ...newItems]);
+    setCart(updatedCart);
     setColorQuantities({});
     setSelectedProductModel(null);
   }}
