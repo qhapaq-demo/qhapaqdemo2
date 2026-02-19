@@ -3345,7 +3345,12 @@ const shareOrderViaWhatsApp = (sale) => {
                                 <td key={talla} className="border p-2">
                                   <div className="flex flex-col items-center gap-1">
                                     {/* Stock semaforizado */}
-                                    <span className={`text-xs ${getStockColor(stockDisponible)}`}>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                      stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
+                                      stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
+                                      stockDisponible > 0   ? 'bg-red-100 text-red-700' :
+                                      'bg-gray-100 text-gray-400'
+                                    }`}>
                                       {stockDisponible}
                                     </span>
                                     {/* Input de cantidad */}
@@ -3367,7 +3372,7 @@ const shareOrderViaWhatsApp = (sale) => {
                                       disabled={stockDisponible === 0}
                                       className={`w-full px-1 py-1 border rounded text-center text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
                                         colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
-                                          ? 'font-bold border-black bg-yellow-50' 
+                                          ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
                                           : ''
                                          }`}
                                     />
@@ -3581,25 +3586,43 @@ const shareOrderViaWhatsApp = (sale) => {
             />
           </div>
 
-          <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
-            {cart.map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border text-sm">
-                <div className="flex-1">
-                  <p className="font-medium">{item.modelo}</p>
-                  <p className="text-xs text-gray-600">{item.color} - {item.talla} x{item.quantity}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">S/ {(item.precioVenta * item.quantity).toFixed(2)}</span>
-                  <button
-                    onClick={() => removeFromCart(index)}
-                    className="p-1 text-red-600 hover:bg-red-50 rounded"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+            <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
+  {(() => {
+    // Agrupar carrito por modelo
+    const grouped = {};
+    cart.forEach((item, index) => {
+      if (!grouped[item.modelo]) grouped[item.modelo] = [];
+      grouped[item.modelo].push({ ...item, index });
+    });
+
+    return Object.entries(grouped).map(([modelo, items]) => (
+      <div key={modelo} className="border rounded-lg overflow-hidden text-sm">
+        {/* Header producto */}
+        <div className="bg-gray-200 px-3 py-1.5">
+          <p className="font-bold text-xs">{modelo}</p>
+        </div>
+        {/* Filas color-talla */}
+        {items.map((item) => (
+          <div key={item.index} className="flex items-center justify-between px-3 py-1.5 border-t">
+            <div className="flex-1">
+              <span className="font-bold text-xs bg-black text-white px-1.5 py-0.5 rounded mr-1">{item.talla}</span>
+              <span className="text-gray-700 text-xs">{item.color} x{item.quantity}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xs">S/ {(item.precioVenta * item.quantity).toFixed(2)}</span>
+              <button
+                onClick={() => removeFromCart(item.index)}
+                className="text-red-500 hover:bg-red-50 rounded p-0.5"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
+        ))}
+      </div>
+    ));
+  })()}
+</div>
 
           {cart.length > 0 ? (
             <>
