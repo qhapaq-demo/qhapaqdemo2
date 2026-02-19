@@ -590,14 +590,11 @@ const addColorToProduct = (productObj) => {
 
   const addToCart = (producto, color, talla, quantity) => {
     if (quantity <= 0) return;
-
-    // Verificar stock disponible
     const stockDisponible = producto.stock?.[color]?.[talla] || 0;
     if (quantity > stockDisponible) {
       alert(`Solo hay ${stockDisponible} unidades disponibles de ${color} - ${talla}`);
       return;
     }
-
     const newItem = {
       productoId: producto.id,
       modelo: producto.modelo,
@@ -607,10 +604,9 @@ const addColorToProduct = (productObj) => {
       precioVenta: producto.precio_venta,
       subtotal: producto.precio_venta * quantity
     };
-
     setCart([...cart, newItem]);
-    setColorQuantities({});
-  };
+
+};
 
   const removeFromCart = (index) => {
     const newCart = cart.filter((_, i) => i !== index);
@@ -3295,8 +3291,8 @@ const shareOrderViaWhatsApp = (sale) => {
             // Función para obtener color del stock
             const getStockColor = (stock) => {
               if (stock >= 10) return 'text-green-600 font-bold';
-              if (stock >= 6) return 'text-yellow-600 font-bold';
-              return 'text-red-600 font-bold';
+              if (stock >= 6) return 'text-yellow-500 font-bold';
+              return 'text-red-700 font-bold';
             };
 
             // Calcular si hay al menos una cantidad ingresada
@@ -3335,7 +3331,11 @@ const shareOrderViaWhatsApp = (sale) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {product.colors && product.colors.map(color => (
+                        {product.colors && product.colors
+                          .filter(color =>
+                            ['S', 'M', 'L', 'XL'].some(talla => (product.stock?.[color]?.[talla] || 0) > 0)
+                          )
+                          .map(color => (
                           <tr key={color} className="hover:bg-gray-50">
                             <td className="border p-2 font-medium sticky left-0 bg-white">{color}</td>
                             {['S', 'M', 'L', 'XL'].map(talla => {
@@ -3365,7 +3365,11 @@ const shareOrderViaWhatsApp = (sale) => {
                                         }
                                       }}
                                       disabled={stockDisponible === 0}
-                                      className="w-full px-1 py-1 border rounded text-center text-xs disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                      className={`w-full px-1 py-1 border rounded text-center text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                                        colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
+                                          ? 'font-bold border-black bg-yellow-50' 
+                                          : ''
+                                         }`}
                                     />
                                   </div>
                                 </td>
@@ -3391,27 +3395,38 @@ const shareOrderViaWhatsApp = (sale) => {
                     Agregar Más
                   </button>
                   <button
-                    onClick={() => {
-                      // Agregar todas las cantidades al carrito
-                      Object.entries(colorQuantities).forEach(([key, qty]) => {
-                        if (qty && parseInt(qty) > 0) {
-                          const [color, talla] = key.split('-');
-                          addToCart(product, color, talla, parseInt(qty));
-                        }
-                      });
-                      // Limpiar cantidades y producto seleccionado
-                      setColorQuantities({});
-                      setSelectedProductModel(null);
-                    }}
-                    disabled={!hasQuantity}
-                    className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
-                      hasQuantity
-                        ? 'bg-black text-white hover:bg-gray-800'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Agregar al Carrito
-                  </button>
+  onClick={() => {
+    const newItems = [];
+    Object.entries(colorQuantities).forEach(([key, qty]) => {
+      if (qty && parseInt(qty) > 0) {
+        const [color, talla] = key.split('-');
+        const stockDisponible = product.stock?.[color]?.[talla] || 0;
+        if (parseInt(qty) <= stockDisponible) {
+          newItems.push({
+            productoId: product.id,
+            modelo: product.modelo,
+            color,
+            talla,
+            quantity: parseInt(qty),
+            precioVenta: product.precio_venta,
+            subtotal: product.precio_venta * parseInt(qty)
+          });
+        }
+      }
+    });
+    setCart([...cart, ...newItems]);
+    setColorQuantities({});
+    setSelectedProductModel(null);
+  }}
+  disabled={!hasQuantity}
+  className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
+    hasQuantity
+      ? 'bg-black text-white hover:bg-gray-800'
+      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+  }`}
+>
+  Agregar al Carrito
+</button>
                 </div>
               </div>
             );
@@ -3649,22 +3664,50 @@ const shareOrderViaWhatsApp = (sale) => {
         </div>
 
         <div>
-          <h3 className="font-bold mb-2 text-sm">Productos</h3>
-          <div className="space-y-2">
-            {viewingSale.items.map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border text-sm">
-                <div className="flex-1">
-                  <p className="font-medium">{item.modelo}</p>
-                  <p className="text-xs text-gray-600">{item.color} - {item.talla}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-600">x{item.quantity}</p>
-                  <p className="font-bold">S/ {item.subtotal.toFixed(2)}</p>
-                </div>
-              </div>
-            ))}
+  <h3 className="font-bold mb-2 text-sm">Productos</h3>
+  <div className="space-y-3">
+    {(() => {
+      // Agrupar por modelo y talla
+      const grouped = {};
+      viewingSale.items.forEach(item => {
+        const modelKey = item.modelo;
+        if (!grouped[modelKey]) grouped[modelKey] = {};
+        if (!grouped[modelKey][item.talla]) grouped[modelKey][item.talla] = [];
+        grouped[modelKey][item.talla].push({ color: item.color, quantity: item.quantity, subtotal: item.subtotal });
+      });
+
+      return Object.entries(grouped).map(([modelo, tallas]) => (
+        <div key={modelo} className="border rounded-lg overflow-hidden">
+          {/* Header del modelo */}
+          <div className="bg-gray-100 px-3 py-2">
+            <p className="font-bold text-sm">{modelo}</p>
           </div>
+          {/* Filas por talla */}
+          {['S', 'M', 'L', 'XL'].filter(t => tallas[t]).map(talla => {
+            const colores = tallas[talla];
+            const subtotalTalla = colores.reduce((sum, c) => sum + c.subtotal, 0);
+            return (
+              <div key={talla} className="flex items-center justify-between px-3 py-2 border-t text-sm">
+                <div className="flex-1">
+                  <span className="font-bold text-xs bg-black text-white px-2 py-0.5 rounded mr-2">{talla}</span>
+                  <span className="text-gray-700">
+                    {colores.map((c, i) => (
+                      <span key={i}>
+                        {i > 0 && ', '}
+                        {c.color}{c.quantity > 1 ? ` x${c.quantity}` : ''}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+                <p className="font-bold">S/ {subtotalTalla.toFixed(2)}</p>
+              </div>
+            );
+          })}
         </div>
+      ));
+    })()}
+  </div>
+</div>
 
         <div className="bg-black text-white p-4 rounded-lg">
           <div className="flex justify-between items-center">
@@ -3672,6 +3715,51 @@ const shareOrderViaWhatsApp = (sale) => {
             <span className="font-bold text-2xl">S/ {viewingSale.total.toFixed(2)}</span>
           </div>
         </div>
+
+        {/* Botón Eliminar - solo si es venta de hoy */}
+        {(() => {
+          const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+          const esDeHoy = viewingSale.fecha === hoy;
+          if (!esDeHoy) return null;
+          return (
+            <button
+              onClick={() => {
+                const pin = prompt('Ingresa el PIN de administrador:');
+                if (pin !== '1111') {
+                  alert('PIN incorrecto.');
+                  return;
+                }
+                if (!confirm(`¿Eliminar venta ${viewingSale.order_number}?`)) return;
+                const productUpdates = [];
+                viewingSale.items.forEach(item => {
+                  const product = products.find(p => p.modelo === item.modelo);
+                  if (product) {
+                    const updatedStock = { ...product.stock };
+                    if (!updatedStock[item.color]) updatedStock[item.color] = {};
+                    updatedStock[item.color][item.talla] = (updatedStock[item.color][item.talla] || 0) + item.quantity;
+                    productUpdates.push({ id: product.id, stock: updatedStock });
+                  }
+                });
+                Promise.all([
+                  supabase.from('sales').delete().eq('id', viewingSale.id),
+                  ...productUpdates.map(u => supabase.from('products').update({ stock: u.stock }).eq('id', u.id))
+                ]).then(() => {
+                  setSales(sales.filter(s => s.id !== viewingSale.id));
+                  setProducts(products.map(p => {
+                    const update = productUpdates.find(u => u.id === p.id);
+                    return update ? { ...p, stock: update.stock } : p;
+                  }));
+                  setViewingSale(null);
+                  alert('Venta eliminada y stock revertido.');
+                });
+              }}
+              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 flex items-center justify-center gap-2 text-sm"
+            >
+              <Trash2 size={16} />
+              Eliminar Venta
+            </button>
+          );
+        })()}
 
         <div className="flex gap-2">
           <button
