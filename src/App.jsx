@@ -27,6 +27,9 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showStockDetail, setShowStockDetail] = useState(false);
+  const [stockDetailData, setStockDetailData] = useState(null);
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -178,21 +181,30 @@ function App() {
         [fecha, ...sortedProducts.map(p => String(stockData[p.modelo] || 0))],
       ];
     } else if (tipoReporte === 'movimientos') {
-      const ingresoData = getIngresoStockReport();
-      if (Object.keys(ingresoData).length === 0) {
-        bodyData = [['Sin ingresos en este período', ...sortedProducts.map(() => '')]];
-      } else {
-        bodyData = Object.entries(ingresoData).map(([f, modelos]) => [
-          f.split('-').reverse().join('/'),
-          ...sortedProducts.map(p => String(modelos[p.modelo] || '-'))
-        ]);
-        bodyData.push([
-          'TOTAL',
-          ...sortedProducts.map(p => String(
-            Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)
-          ))
-        ]);
-      }
+  const ingresoData = getIngresoStockReport();
+  if (Object.keys(ingresoData).length === 0) {
+    bodyData = [['Sin ingresos en este período', ...sortedProducts.map(() => '')]];
+  } else {
+    bodyData = Object.entries(ingresoData).map(([f, modelos]) => [
+      f.split('-').reverse().join('/'),
+      ...sortedProducts.map(p => {
+        const d = modelos[p.modelo];
+        if (!d) return '-';
+        let texto = '';
+        if (d.ingreso !== 0) texto += d.ingreso;
+        if (d.correccion !== 0) texto += (texto ? ' [C:' : '[C:') + d.correccion + ']';
+        return texto || '-';
+      })
+    ]);
+    bodyData.push([
+      'TOTAL',
+      ...sortedProducts.map(p => String(
+        Object.values(ingresoData).reduce((sum, m) => 
+          sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
+        )
+      ))
+    ]);
+  }
     } else if (tipoReporte === 'salidas') {
       const salidaData = getSalidaVentasReport();
       if (Object.keys(salidaData).length === 0) {
@@ -728,62 +740,94 @@ const addColorToProduct = (productObj) => {
   // ============================================
 
   const addStockToProduct = async () => {
-    if (!stockToAdd.modelo) {
-      alert('Selecciona un producto');
-      return;
+  if (isProcessing) return; // Prevenir múltiples clicks
+  
+  if (!stockToAdd.modelo) {
+    alert('Selecciona un producto');
+    return;
+  }
+
+  const product = products.find(p => p.modelo === stockToAdd.modelo);
+  if (!product) return;
+
+  setIsProcessing(true); // ← NUEVO
+
+  const { fecha, hora } = getPeruDateTime();
+  const stockTransactionsToInsert = [];
+  const updatedStock = { ...product.stock };
+  const esCorreccion = stockToAdd.esCorreccion || false;
+
+  Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
+    if (!updatedStock[color]) {
+      updatedStock[color] = { S: 0, M: 0, L: 0, XL: 0 };
     }
 
-    const product = products.find(p => p.modelo === stockToAdd.modelo);
-    if (!product) return;
+    Object.entries(tallas).forEach(([talla, cantidad]) => {
+      const cantidadInt = parseInt(cantidad) || 0;
+      if (cantidadInt !== 0) {
+        stockTransactionsToInsert.push({
+          fecha: fecha,
+          hora: hora,
+          tipo: 'INGRESO',
+          modelo: product.modelo,
+          color: color,
+          talla: talla,
+          cantidad: cantidadInt,
+          notes: esCorreccion
+            ? `⚠️ Corrección: ${cantidadInt > 0 ? '+' : ''}${cantidadInt}`
+            : 'Ingreso manual de stock'
+        });
 
-    const { fecha, hora } = getPeruDateTime();
-    const stockTransactionsToInsert = [];
-    const updatedStock = { ...product.stock };
-
-    // Procesar cada color y talla
-    Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
-      if (!updatedStock[color]) {
-        updatedStock[color] = { S: 0, M: 0, L: 0, XL: 0 };
+        updatedStock[color][talla] = (updatedStock[color][talla] || 0) + cantidadInt;
       }
-
-      Object.entries(tallas).forEach(([talla, cantidad]) => {
-        if (cantidad && cantidad > 0) {
-          // Registrar transacción
-          stockTransactionsToInsert.push({
-            fecha: fecha,
-            hora: hora,
-            tipo: 'INGRESO',
-            modelo: product.modelo,
-            color: color,
-            talla: talla,
-            cantidad: parseInt(cantidad),
-            notes: 'Ingreso manual de stock'
-          });
-
-          // Actualizar stock local
-          updatedStock[color][talla] = (updatedStock[color][talla] || 0) + parseInt(cantidad);
-        }
-      });
     });
+  });
 
-    if (stockTransactionsToInsert.length === 0) {
-      alert('No hay cantidades para agregar');
-      return;
+  if (stockTransactionsToInsert.length === 0) {
+    setIsProcessing(false); // ← NUEVO
+    alert('No hay cantidades para agregar');
+    return;
+  }
+
+  console.log('Transacciones a insertar:', stockTransactionsToInsert);
+
+  await supabase.from('stock_transactions').insert(stockTransactionsToInsert);
+
+  await supabase
+    .from('products')
+    .update({ stock: updatedStock, updated_at: new Date().toISOString() })
+    .eq('id', product.id);
+
+  setProducts(products.map(p =>
+    p.id === product.id ? { ...p, stock: updatedStock } : p
+  ));
+
+  // Preparar datos para el modal de confirmación
+const detailItems = [];
+let total = 0;
+Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
+  Object.entries(tallas).forEach(([talla, cantidad]) => {
+    const cantidadInt = parseInt(cantidad) || 0;
+    if (cantidadInt !== 0) {
+      detailItems.push({ color, talla, cantidad: cantidadInt });
+      total += Math.abs(cantidadInt);
     }
+  });
+});
 
-    // Insertar transacciones
-    await supabase.from('stock_transactions').insert(stockTransactionsToInsert);
+setStockDetailData({
+  fecha: fecha,
+  modelo: product.modelo,
+  items: detailItems,
+  total: total,
+  esCorreccion: esCorreccion
+});
 
-    // Actualizar producto
-    await supabase
-      .from('products')
-      .update({ stock: updatedStock, updated_at: new Date().toISOString() })
-      .eq('id', product.id);
-
-    setShowAddStock(false);
-    setStockToAdd({ modelo: '', colors: {} });
-    alert('Stock agregado exitosamente');
-  };
+setShowAddStock(false);
+setStockToAdd({ modelo: '', colors: {}, esCorreccion: false });
+setIsProcessing(false);
+setShowStockDetail(true); // Mostrar modal de confirmación
+};
 
   // ============================================
   // FUNCIONES DE REPORTES
@@ -810,25 +854,63 @@ const addColorToProduct = (productObj) => {
     }
   };
 
-  const getIngresoStockReport = () => {
-    const { start, end } = getDateRangeForFilter(reportFilter);
+    const getIngresoStockReport = () => {
+  const { start, end } = getDateRangeForFilter(reportFilter);
+  
+  // Solo filtramos por tipo INGRESO (correcciones también son INGRESO pero con cantidad negativa)
+  const filteredTransactions = stockTransactions.filter(t => 
+    t.tipo === 'INGRESO' &&
+    t.fecha >= start &&
+    t.fecha <= end
+  );
+
+
+  const grouped = {};
+  filteredTransactions.forEach(t => {
+    if (!grouped[t.fecha]) grouped[t.fecha] = {};
+    if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = { ingreso: 0, correccion: 0 };
     
-    const filteredTransactions = stockTransactions.filter(t => 
-      t.tipo === 'INGRESO' &&
-      t.fecha >= start &&
-      t.fecha <= end
-    );
+    // Separar por signo de cantidad
+    if (t.cantidad > 0) {
+      grouped[t.fecha][t.modelo].ingreso += t.cantidad;
+    } else if (t.cantidad < 0) {
+      grouped[t.fecha][t.modelo].correccion += t.cantidad;
+    }
+  });
 
-    // Agrupar por fecha y modelo
-    const grouped = {};
-    filteredTransactions.forEach(t => {
-      if (!grouped[t.fecha]) grouped[t.fecha] = {};
-      if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = 0;
-      grouped[t.fecha][t.modelo] += t.cantidad;
+  return grouped;
+};
+
+// Función para obtener detalle de ingresos/correcciones de un día específico
+const getStockDetailByDate = (fecha, modelo) => {
+  const transactions = stockTransactions.filter(t => 
+    t.tipo === 'INGRESO' &&
+    t.fecha === fecha &&
+    t.modelo === modelo
+  );
+
+  const items = [];
+  let total = 0;
+  let esCorreccion = false;
+
+  transactions.forEach(t => {
+    items.push({
+      color: t.color,
+      talla: t.talla,
+      cantidad: t.cantidad
     });
+    total += Math.abs(t.cantidad);
+    if (t.cantidad < 0) esCorreccion = true;
+  });
 
-    return grouped;
+  return {
+    fecha: fecha,
+    modelo: modelo,
+    items: items,
+    total: total,
+    esCorreccion: esCorreccion
   };
+};
 
   const getSalidaVentasReport = () => {
     const { start, end } = getDateRangeForFilter(reportFilter);
@@ -1838,8 +1920,28 @@ const shareOrderViaWhatsApp = (sale) => {
                 <tr key={fecha}>
                   <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
                   {sortedProducts.map(p => (
-                    <td key={p.id} className="border p-1.5 text-center">
-                      {modelos[p.modelo] || '-'}
+                    <td 
+                      key={p.id} 
+                      className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
+                      onClick={() => {
+                        if (modelos[p.modelo] && (modelos[p.modelo].ingreso !== 0 || modelos[p.modelo].correccion !== 0)) {
+                          const detail = getStockDetailByDate(fecha, p.modelo);
+                          setStockDetailData(detail);
+                          setShowStockDetail(true);
+                        }
+                      }}
+                    >
+                      {modelos[p.modelo] ? (
+                        <div className="flex items-center justify-center gap-1">
+                          {modelos[p.modelo].ingreso !== 0 && (
+                            <span className="text-sm">{modelos[p.modelo].ingreso}</span>
+                          )}
+                          {modelos[p.modelo].correccion !== 0 && (
+                            <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>
+                          )}
+                          {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
+                        </div>
+                      ) : '-'}
                     </td>
                   ))}
                 </tr>
@@ -1860,7 +1962,9 @@ const shareOrderViaWhatsApp = (sale) => {
               const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
               return sortedProducts.map(p => (
                 <td key={p.id} className="border p-2 text-center">
-                  {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
+                  {Object.values(ingresoData).reduce((sum, m) => 
+                    sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
+                  )}
                 </td>
               ));
             })()}
@@ -2080,53 +2184,75 @@ const shareOrderViaWhatsApp = (sale) => {
 )}
 
                 {/* MOVIMIENTOS DE STOCK */}
-                {showStockModal === 'movimientos' && (
-                  (() => {
-                    const ingresoData = getIngresoStockReport();
-                    const stockData = getStockALaFechaReport();
-                    const sortedProducts = [...products].sort((a, b) => {
-                      const stockA = stockData[a.modelo] || 0;
-                      const stockB = stockData[b.modelo] || 0;
-                      return stockB - stockA;
-                    });
-                    
-                    return Object.keys(ingresoData).length > 0 ? (
-                      Object.entries(ingresoData).map(([fecha, modelos]) => (
-                        <tr key={fecha} className="even:bg-gray-50">
-                          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-                            {fecha.split('-').reverse().join('/')}
-                          </td>
-                          {sortedProducts.map(p => (
-                            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-xs">
-                              {modelos[p.modelo] || '-'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
-                          No hay ingresos en este período
-                        </td>
-                      </tr>
-                    );
-                  })()
+{showStockModal === 'movimientos' && (
+  (() => {
+    const ingresoData = getIngresoStockReport();
+    const stockData = getStockALaFechaReport();
+    const sortedProducts = [...products].sort((a, b) => {
+      const stockA = stockData[a.modelo] || 0;
+      const stockB = stockData[b.modelo] || 0;
+      return stockB - stockA;
+    });
+    
+    return Object.keys(ingresoData).length > 0 ? (
+      Object.entries(ingresoData).map(([fecha, modelos]) => (
+        <tr key={fecha} className="even:bg-gray-50">
+          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+            {fecha.split('-').reverse().join('/')}
+          </td>
+          {sortedProducts.map(p => (
+            <td 
+              key={p.id} 
+              className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
+              onClick={() => {
+                if (modelos[p.modelo] && (modelos[p.modelo].ingreso !== 0 || modelos[p.modelo].correccion !== 0)) {
+                  const detail = getStockDetailByDate(fecha, p.modelo);
+                  setStockDetailData(detail);
+                  setShowStockDetail(true);
+                }
+              }}
+            >
+    {modelos[p.modelo] ? (
+      <div className="flex items-center justify-center gap-1">
+                 {modelos[p.modelo].ingreso !== 0 && (
+                   <span className="text-sm">{modelos[p.modelo].ingreso}</span>
+                 )}
+                 {modelos[p.modelo].correccion !== 0 && (
+                   <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>
                 )}
-                {showStockModal === 'movimientos' && (
-                  <tr className="bg-gray-200 font-bold">
-                    <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
-                    {(() => {
-                      const ingresoData = getIngresoStockReport();
-                      const stockData = getStockALaFechaReport();
-                      const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
-                      return sortedProducts.map(p => (
-                        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
-                          {Object.values(ingresoData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
-                        </td>
-                      ));
-                    })()}
-                  </tr>
-                )}
+                {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
+              </div>
+            ) : '-'}
+          </td>
+        ))}
+        </tr>
+      ))
+    ) : (
+      <tr>
+        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
+          No hay ingresos en este período
+        </td>
+      </tr>
+    );
+  })()
+)}
+{showStockModal === 'movimientos' && (
+  <tr className="bg-gray-200 font-bold">
+    <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
+    {(() => {
+      const ingresoData = getIngresoStockReport();
+      const stockData = getStockALaFechaReport();
+      const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+      return sortedProducts.map(p => (
+        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+          {Object.values(ingresoData).reduce((sum, m) => 
+            sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
+          )}
+        </td>
+      ));
+    })()}
+  </tr>
+)}
 
                 {/* SALIDA - VENTAS */}
                 {showStockModal === 'salidas' && (
@@ -2953,90 +3079,247 @@ const shareOrderViaWhatsApp = (sale) => {
         </div>
       )}
 
-      {/* MODAL: Agregar Stock */}
-      {showAddStock && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Agregar Stock a Producto Existente</h2>
-              <button 
-                onClick={() => {
-                  setShowAddStock(false);
-                  setStockToAdd({ modelo: '', colors: {} });
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* MODAL: Agregar Stock - TAREA 1 COMPLETADA */}
+{showAddStock && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">Agregar Stock</h2>
+        <button 
+          onClick={() => setShowAddStock(false) || setStockToAdd({ modelo: '', colors: {}, esCorreccion: false })}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Seleccionar Producto</label>
-                <select
-                  value={stockToAdd.modelo}
-                  onChange={(e) => setStockToAdd({ modelo: e.target.value, colors: {} })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
-                >
-                  <option value="">-- Seleccionar --</option>
-                  {products.filter(p => p.activo !== false).map(p => (
-                    <option key={p.id} value={p.modelo}>{p.modelo}</option>
-                  ))}
-                </select>
-              </div>
+      <div className="space-y-4">
 
-              {stockToAdd.modelo && (
-                <div className="border rounded-lg p-4">
-                  <p className="font-medium mb-3">Ejemplo: BOCA RECTA - VARON o Boca recta - varon</p>
-                  {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
-                    <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
-                      <p className="font-medium mb-2">{color}</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {['S', 'M', 'L', 'XL'].map(talla => (
-                          <div key={talla}>
-                            <label className="block text-sm text-gray-600 mb-1">{talla}</label>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              value={stockToAdd.colors[color]?.[talla] || ''}
-                              onChange={(e) => {
+        {/* Toggle Ingreso / Corrección */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setStockToAdd({ ...stockToAdd, esCorreccion: false, colors: {} })}
+            className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+              !stockToAdd.esCorreccion ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            📦 Ingreso Normal
+          </button>
+          <button
+            onClick={() => setStockToAdd({ ...stockToAdd, esCorreccion: true, colors: {} })}
+            className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+              stockToAdd.esCorreccion ? 'bg-red-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+            }`}
+          >
+            ⚠️ Corrección
+          </button>
+        </div>
+
+        {/* Aviso corrección */}
+        {stockToAdd.esCorreccion && (
+          <div className="bg-red-50 border-2 border-red-400 rounded-lg p-3">
+            <p className="text-red-700 font-bold text-sm">⚠️ MODO CORRECCIÓN</p>
+            <p className="text-red-600 text-xs mt-1">Usa los botones - y + para ajustar. Queda registrado en rojo en el historial.</p>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Seleccionar Producto</label>
+          <select
+            value={stockToAdd.modelo}
+            onChange={(e) => setStockToAdd({ ...stockToAdd, modelo: e.target.value, colors: {} })}
+            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+          >
+            <option value="">-- Seleccionar --</option>
+            {products.filter(p => p.activo !== false).map(p => (
+              <option key={p.id} value={p.modelo}>{p.modelo}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* ============================================ */}
+        {/* TAREA 1: DOS FORMATOS DIFERENTES */}
+        {/* ============================================ */}
+        {stockToAdd.modelo && (
+          <div className={`border-2 rounded-lg p-4 ${stockToAdd.esCorreccion ? 'border-red-300' : 'border-gray-200'}`}>
+            {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
+              <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="font-medium mb-2">{color}</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {['S', 'M', 'L', 'XL'].map(talla => {
+                    const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
+                    const stockActual = products.find(p => p.modelo === stockToAdd.modelo)?.stock?.[color]?.[talla] || 0;
+                    
+                    return (
+                      <div key={talla} className="flex flex-col items-center gap-1">
+                        <label className="text-xs text-gray-500">{talla} <span className="text-gray-400">({stockActual})</span></label>
+                        
+                        {/* 📦 INGRESO NORMAL: Input de texto verde fosforescente */}
+                        {!stockToAdd.esCorreccion && (
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={stockToAdd.colors[color]?.[talla] || ''}
+                            onChange={(e) => {
+                              const newColors = { ...stockToAdd.colors };
+                              if (!newColors[color]) newColors[color] = {};
+                              newColors[color][talla] = e.target.value;
+                              setStockToAdd({ ...stockToAdd, colors: newColors });
+                            }}
+                            className={`w-full px-1 py-1 border rounded text-center text-xs ${
+                              val > 0 
+                                ? 'font-bold border-2 border-black bg-lime-300 text-black'
+                                : 'border-gray-300'
+                            }`}
+                          />
+                        )}
+                        
+                        {/* ⚠️ CORRECCIÓN: Botones +/- */}
+                        {stockToAdd.esCorreccion && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
                                 const newColors = { ...stockToAdd.colors };
                                 if (!newColors[color]) newColors[color] = {};
-                                newColors[color][talla] = e.target.value;
+                                newColors[color][talla] = val - 1;
                                 setStockToAdd({ ...stockToAdd, colors: newColors });
                               }}
-                              className="w-full px-2 py-1 border rounded text-sm"
-                            />
+                              className="w-7 h-7 bg-red-500 text-white rounded font-bold text-sm"
+                            >-</button>
+                            <span className={`w-8 text-center font-bold text-sm ${
+                              val < 0 ? 'text-red-600' : val > 0 ? 'text-blue-600' : 'text-gray-400'
+                            }`}>{val}</span>
+                            <button
+                              onClick={() => {
+                                const newColors = { ...stockToAdd.colors };
+                                if (!newColors[color]) newColors[color] = {};
+                                newColors[color][talla] = val + 1;
+                                setStockToAdd({ ...stockToAdd, colors: newColors });
+                              }}
+                              className="w-7 h-7 bg-blue-500 text-white rounded font-bold text-sm"
+                            >+</button>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowAddStock(false);
-                    setStockToAdd({ modelo: '', colors: {} });
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={addStockToProduct}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Agregar Stock
-                </button>
               </div>
-            </div>
+            ))}
           </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowAddStock(false);
+              setStockToAdd({ modelo: '', colors: {}, esCorreccion: false });
+            }}
+            className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium"
+          >
+            Cancelar
+           </button>
+           <button
+             onClick={addStockToProduct}
+             disabled={isProcessing}
+             className={`flex-1 px-4 py-2 text-white rounded-lg font-medium ${
+               isProcessing 
+                 ? 'bg-gray-400 cursor-not-allowed'
+                 : stockToAdd.esCorreccion 
+                   ? 'bg-red-600 hover:bg-red-700' 
+                   : 'bg-blue-600 hover:bg-blue-700'
+             }`}
+           >  
+             {isProcessing ? '⏳ Procesando...' : stockToAdd.esCorreccion ? '⚠️ Guardar Corrección' : '📦 Agregar Stock'}
+           </button>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: Confirmación de Stock Agregado */}
+{showStockDetail && stockDetailData && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+      
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {stockDetailData.esCorreccion ? (
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">⚠️</span>
+            </div>
+          ) : (
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">✅</span>
+            </div>
+          )}
+          <h2 className="text-lg font-bold">
+            {stockDetailData.esCorreccion ? 'Corrección Guardada' : 'Stock Agregado'}
+          </h2>
+        </div>
+        <button 
+          onClick={() => setShowStockDetail(false)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Fecha y Modelo */}
+      <div className="mb-4 pb-3 border-b">
+        <p className="text-sm text-gray-600">
+          {stockDetailData.fecha.split('-').reverse().join('/')} - {stockDetailData.modelo}
+        </p>
+      </div>
+
+      {/* Detalle agrupado por color */}
+      <div className="mb-4 space-y-2 max-h-60 overflow-y-auto">
+        {(() => {
+          // Agrupar por color
+          const grouped = {};
+          stockDetailData.items.forEach(item => {
+            if (!grouped[item.color]) grouped[item.color] = [];
+            grouped[item.color].push(item);
+          });
+
+          return Object.entries(grouped).map(([color, items]) => (
+            <div key={color} className="text-sm">
+              <span className="font-medium">{color}:</span>{' '}
+              {items.map((item, idx) => (
+                <span key={idx}>
+                  {item.talla}({item.cantidad > 0 ? '+' : ''}{item.cantidad})
+                  {idx < items.length - 1 ? ', ' : ''}
+                </span>
+              ))}
+            </div>
+          ));
+        })()}
+      </div>
+
+      {/* Total */}
+      <div className="pt-3 border-t">
+        <div className="flex justify-between items-center">
+          <span className="font-bold">TOTAL:</span>
+          <span className="font-bold text-lg">
+            {stockDetailData.esCorreccion && stockDetailData.total !== 0 ? '±' : ''}
+            {stockDetailData.total}
+          </span>
+        </div>
+      </div>
+
+      {/* Botón Cerrar */}
+      <button
+        onClick={() => setShowStockDetail(false)}
+        className="w-full mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+      >
+        Cerrar
+      </button>
+    </div>
+  </div>
+)}
 
       {/* MODAL: Agregar Cliente */}
       {showAddClient && (
@@ -3177,8 +3460,8 @@ const shareOrderViaWhatsApp = (sale) => {
       {/* MODAL: Nueva Venta - OPTIMIZADO PARA MAYORISTAS */}
 {showAddSale && (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-    <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between mb-4 sticky top-0 bg-white z-10 py-3 border-b">
         <h2 className="text-xl font-bold">Nueva Venta</h2>
         <button onClick={() => {
           setShowAddSale(false);
@@ -3301,7 +3584,7 @@ const shareOrderViaWhatsApp = (sale) => {
             return (
               <div className="space-y-3">
                 {/* Header del producto seleccionado */}
-                <div className="bg-gray-50 rounded-lg p-3 border">
+                <div className="bg-black text-white rounded-lg p-3 border">
                   <div className="flex items-center gap-3">
                     {product.imagen && (
                       <img 
@@ -3311,8 +3594,8 @@ const shareOrderViaWhatsApp = (sale) => {
                       />
                     )}
                     <div className="flex-1">
-                      <p className="font-bold text-base">{product.modelo}</p>
-                      <p className="text-sm text-emerald-600">S/ {product.precio_venta}</p>
+                      <p className="font-bold text-lg">{product.modelo}</p>
+                      <p className="text-sm text-emerald-400">S/ {product.precio_venta}</p>
                     </div>
                   </div>
                 </div>
@@ -3321,15 +3604,15 @@ const shareOrderViaWhatsApp = (sale) => {
                 <div className="border rounded-lg overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-gray-100">
-                        <tr>
-                          <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100">Color/Talla</th>
-                          <th className="border p-2 text-center font-bold">S</th>
-                          <th className="border p-2 text-center font-bold">M</th>
-                          <th className="border p-2 text-center font-bold">L</th>
-                          <th className="border p-2 text-center font-bold">XL</th>
-                        </tr>
-                      </thead>
+                     <thead className="bg-gray-100">
+                       <tr>
+                         <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-xs md:text-sm">Color/Talla</th>
+                         <th className="border p-2 text-center font-bold text-sm md:text-base">S</th>
+                         <th className="border p-2 text-center font-bold text-sm md:text-base">M</th>
+                         <th className="border p-2 text-center font-bold text-sm md:text-base">L</th>
+                         <th className="border p-2 text-center font-bold text-sm md:text-base">XL</th>
+                       </tr>
+                     </thead>
                       <tbody>
                         {product.colors && product.colors
                           .filter(color =>
