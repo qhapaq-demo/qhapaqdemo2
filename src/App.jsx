@@ -755,7 +755,7 @@ const addColorToProduct = (productObj) => {
   const { fecha, hora } = getPeruDateTime();
   const stockTransactionsToInsert = [];
   const updatedStock = { ...product.stock };
-  const esCorreccion = stockToAdd.esCorreccion || false;
+  const esCorreccion = false; // Ya no usamos toggle, detectamos por signo
 
   Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
     if (!updatedStock[color]) {
@@ -773,8 +773,8 @@ const addColorToProduct = (productObj) => {
           color: color,
           talla: talla,
           cantidad: cantidadInt,
-          notes: esCorreccion
-            ? `⚠️ Corrección: ${cantidadInt > 0 ? '+' : ''}${cantidadInt}`
+          notes: cantidadInt < 0
+            ? `⚠️ Corrección: ${cantidadInt}`
             : 'Ingreso manual de stock'
         });
 
@@ -3079,14 +3079,17 @@ const shareOrderViaWhatsApp = (sale) => {
         </div>
       )}
 
-      {/* MODAL: Agregar Stock - TAREA 1 COMPLETADA */}
+      {/* MODAL: Agregar Stock - SIMPLIFICADO V2 */}
 {showAddStock && (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Agregar Stock</h2>
         <button 
-          onClick={() => setShowAddStock(false) || setStockToAdd({ modelo: '', colors: {}, esCorreccion: false })}
+          onClick={() => {
+            setShowAddStock(false);
+            setStockToAdd({ modelo: '', colors: {} });
+          }}
           className="p-2 hover:bg-gray-100 rounded-lg"
         >
           <X size={20} />
@@ -3095,33 +3098,12 @@ const shareOrderViaWhatsApp = (sale) => {
 
       <div className="space-y-4">
 
-        {/* Toggle Ingreso / Corrección */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setStockToAdd({ ...stockToAdd, esCorreccion: false, colors: {} })}
-            className={`flex-1 py-2 rounded-lg font-medium text-sm ${
-              !stockToAdd.esCorreccion ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-          >
-            📦 Ingreso Normal
-          </button>
-          <button
-            onClick={() => setStockToAdd({ ...stockToAdd, esCorreccion: true, colors: {} })}
-            className={`flex-1 py-2 rounded-lg font-medium text-sm ${
-              stockToAdd.esCorreccion ? 'bg-red-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-          >
-            ⚠️ Corrección
-          </button>
+        {/* Instrucciones */}
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+          <p className="text-sm text-blue-900">
+            💡 <strong>Tip:</strong> Escribe números positivos para ingresar (+14) o negativos para corregir (-10)
+          </p>
         </div>
-
-        {/* Aviso corrección */}
-        {stockToAdd.esCorreccion && (
-          <div className="bg-red-50 border-2 border-red-400 rounded-lg p-3">
-            <p className="text-red-700 font-bold text-sm">⚠️ MODO CORRECCIÓN</p>
-            <p className="text-red-600 text-xs mt-1">Usa los botones - y + para ajustar. Queda registrado en rojo en el historial.</p>
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium mb-1">Seleccionar Producto</label>
@@ -3137,70 +3119,43 @@ const shareOrderViaWhatsApp = (sale) => {
           </select>
         </div>
 
-        {/* ============================================ */}
-        {/* TAREA 1: DOS FORMATOS DIFERENTES */}
-        {/* ============================================ */}
+        {/* Input unificado para todas las tallas */}
         {stockToAdd.modelo && (
-          <div className={`border-2 rounded-lg p-4 ${stockToAdd.esCorreccion ? 'border-red-300' : 'border-gray-200'}`}>
+          <div className="border-2 rounded-lg p-4 border-gray-200">
             {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
               <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <p className="font-medium mb-2">{color}</p>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-4 gap-2 md:gap-4">
                   {['S', 'M', 'L', 'XL'].map(talla => {
                     const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
                     const stockActual = products.find(p => p.modelo === stockToAdd.modelo)?.stock?.[color]?.[talla] || 0;
                     
                     return (
                       <div key={talla} className="flex flex-col items-center gap-1">
-                        <label className="text-xs text-gray-500">{talla} <span className="text-gray-400">({stockActual})</span></label>
+                        <label className="text-xs text-gray-500 font-medium">
+                          {talla} <span className="text-gray-400">({stockActual})</span>
+                        </label>
                         
-                        {/* 📦 INGRESO NORMAL: Input de texto verde fosforescente */}
-                        {!stockToAdd.esCorreccion && (
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="0"
-                            value={stockToAdd.colors[color]?.[talla] || ''}
-                            onChange={(e) => {
-                              const newColors = { ...stockToAdd.colors };
-                              if (!newColors[color]) newColors[color] = {};
-                              newColors[color][talla] = e.target.value;
-                              setStockToAdd({ ...stockToAdd, colors: newColors });
-                            }}
-                            className={`w-full px-1 py-1 border rounded text-center text-xs ${
-                              val > 0 
-                                ? 'font-bold border-2 border-black bg-lime-300 text-black'
-                                : 'border-gray-300'
-                            }`}
-                          />
-                        )}
-                        
-                        {/* ⚠️ CORRECCIÓN: Botones +/- */}
-                        {stockToAdd.esCorreccion && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => {
-                                const newColors = { ...stockToAdd.colors };
-                                if (!newColors[color]) newColors[color] = {};
-                                newColors[color][talla] = val - 1;
-                                setStockToAdd({ ...stockToAdd, colors: newColors });
-                              }}
-                              className="w-7 h-7 bg-red-500 text-white rounded font-bold text-sm"
-                            >-</button>
-                            <span className={`w-8 text-center font-bold text-sm ${
-                              val < 0 ? 'text-red-600' : val > 0 ? 'text-blue-600' : 'text-gray-400'
-                            }`}>{val}</span>
-                            <button
-                              onClick={() => {
-                                const newColors = { ...stockToAdd.colors };
-                                if (!newColors[color]) newColors[color] = {};
-                                newColors[color][talla] = val + 1;
-                                setStockToAdd({ ...stockToAdd, colors: newColors });
-                              }}
-                              className="w-7 h-7 bg-blue-500 text-white rounded font-bold text-sm"
-                            >+</button>
-                          </div>
-                        )}
+                        {/* Input unificado - acepta positivos y negativos */}
+                        <input
+                          type="text"
+                          inputMode="text"
+                          placeholder="0"
+                          value={stockToAdd.colors[color]?.[talla] || ''}
+                          onChange={(e) => {
+                            const newColors = { ...stockToAdd.colors };
+                            if (!newColors[color]) newColors[color] = {};
+                            newColors[color][talla] = e.target.value;
+                            setStockToAdd({ ...stockToAdd, colors: newColors });
+                          }}
+                          className={`w-full px-2 py-2 border rounded text-center text-sm ${
+                            val !== 0
+                              ? val > 0
+                                ? 'font-bold border-2 border-green-600 bg-lime-300 text-black'  // Positivo: verde
+                                : 'font-bold border-2 border-red-600 bg-red-100 text-red-800'   // Negativo: rojo
+                              : 'border-gray-300'  // Vacío: normal
+                          }`}
+                        />
                       </div>
                     );
                   })}
@@ -3214,25 +3169,23 @@ const shareOrderViaWhatsApp = (sale) => {
           <button
             onClick={() => {
               setShowAddStock(false);
-              setStockToAdd({ modelo: '', colors: {}, esCorreccion: false });
+              setStockToAdd({ modelo: '', colors: {} });
             }}
             className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium"
           >
             Cancelar
-           </button>
-           <button
-             onClick={addStockToProduct}
-             disabled={isProcessing}
-             className={`flex-1 px-4 py-2 text-white rounded-lg font-medium ${
-               isProcessing 
-                 ? 'bg-gray-400 cursor-not-allowed'
-                 : stockToAdd.esCorreccion 
-                   ? 'bg-red-600 hover:bg-red-700' 
-                   : 'bg-blue-600 hover:bg-blue-700'
-             }`}
-           >  
-             {isProcessing ? '⏳ Procesando...' : stockToAdd.esCorreccion ? '⚠️ Guardar Corrección' : '📦 Agregar Stock'}
-           </button>
+          </button>
+          <button
+            onClick={addStockToProduct}
+            disabled={isProcessing}
+            className={`flex-1 px-4 py-2 text-white rounded-lg font-medium ${
+              isProcessing 
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >  
+            {isProcessing ? '⏳ Procesando...' : '📦 Guardar Cambios'}
+          </button>
         </div>
       </div>
     </div>
