@@ -67,9 +67,9 @@ function App() {
   const [clientSearch, setClientSearch] = useState('');
   const [showClientResults, setShowClientResults] = useState(false);
   const [showCreateClient, setShowCreateClient] = useState(false);
-  const [saleDate, setSaleDate] = useState(getPeruDateTime().fecha);
+  const [saleDate, setSaleDate] = useState('');
   const [salesChannel, setSalesChannel] = useState('TIENDA');
-  
+
   // Estados para selección de productos en ventas
   const [selectedProductModel, setSelectedProductModel] = useState(null);
   const [selectedTalla, setSelectedTalla] = useState(null);
@@ -84,9 +84,16 @@ function App() {
   // Estados para reportes
   const [reportFilter, setReportFilter] = useState('hoy');
   const [customDateRange, setCustomDateRange] = useState({
-    start: getPeruDateTime().fecha,
-    end: getPeruDateTime().fecha
-  });
+  start: '',
+  end: ''
+});
+
+  // Inicializar fechas
+useEffect(() => {
+  const fechaHoy = getPeruDateTime().fecha;
+  setSaleDate(fechaHoy);
+  setCustomDateRange({ start: fechaHoy, end: fechaHoy });
+}, []);
 
   // ============================================
   // FUNCIÓN PARA ABREVIAR NOMBRES DE PRODUCTOS
@@ -757,31 +764,47 @@ const addColorToProduct = (productObj) => {
   const updatedStock = { ...product.stock };
   const esCorreccion = false; // Ya no usamos toggle, detectamos por signo
 
-  Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
-    if (!updatedStock[color]) {
-      updatedStock[color] = { S: 0, M: 0, L: 0, XL: 0 };
-    }
-
-    Object.entries(tallas).forEach(([talla, cantidad]) => {
-      const cantidadInt = parseInt(cantidad) || 0;
-      if (cantidadInt !== 0) {
-        stockTransactionsToInsert.push({
-          fecha: fecha,
-          hora: hora,
-          tipo: 'INGRESO',
-          modelo: product.modelo,
-          color: color,
-          talla: talla,
-          cantidad: cantidadInt,
-          notes: cantidadInt < 0
-            ? `⚠️ Corrección: ${cantidadInt}`
-            : 'Ingreso manual de stock'
-        });
-
-        updatedStock[color][talla] = (updatedStock[color][talla] || 0) + cantidadInt;
+  // PRIMERO: Validar que ninguna quedará negativa
+for (const [color, tallas] of Object.entries(stockToAdd.colors)) {
+  for (const [talla, cantidad] of Object.entries(tallas)) {
+    const cantidadInt = parseInt(cantidad) || 0;
+    if (cantidadInt !== 0) {
+      const stockActual = product.stock?.[color]?.[talla] || 0;
+      if (stockActual + cantidadInt < 0) {
+        alert(`❌ ${color} ${talla}: Stock actual ${stockActual}, no puedes restar ${Math.abs(cantidadInt)}`);
+        setIsProcessing(false);
+        return;
       }
-    });
+    }
+  }
+}
+
+// SEGUNDO: Procesar (ya validado)
+Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
+  if (!updatedStock[color]) {
+    updatedStock[color] = { S: 0, M: 0, L: 0, XL: 0 };
+  }
+
+  Object.entries(tallas).forEach(([talla, cantidad]) => {
+    const cantidadInt = parseInt(cantidad) || 0;
+    if (cantidadInt !== 0) {
+      stockTransactionsToInsert.push({
+        fecha: fecha,
+        hora: hora,
+        tipo: 'INGRESO',
+        modelo: product.modelo,
+        color: color,
+        talla: talla,
+        cantidad: cantidadInt,
+        notes: cantidadInt < 0
+          ? `⚠️ Corrección: ${cantidadInt}`
+          : 'Ingreso manual de stock'
+      });
+
+      updatedStock[color][talla] = (updatedStock[color][talla] || 0) + cantidadInt;
+    }
   });
+});
 
   if (stockTransactionsToInsert.length === 0) {
     setIsProcessing(false); // ← NUEVO
@@ -810,7 +833,7 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
     const cantidadInt = parseInt(cantidad) || 0;
     if (cantidadInt !== 0) {
       detailItems.push({ color, talla, cantidad: cantidadInt });
-      total += Math.abs(cantidadInt);
+      total += cantidadInt;
     }
   });
 });
@@ -833,6 +856,23 @@ setShowStockDetail(true); // Mostrar modal de confirmación
   // FUNCIONES DE REPORTES
   // ============================================
 
+const getPeruDateTime = () => {
+  const now = new Date();
+  const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
+  
+  const year = peruTime.getFullYear();
+  const month = String(peruTime.getMonth() + 1).padStart(2, '0');
+  const day = String(peruTime.getDate()).padStart(2, '0');
+  const hours = String(peruTime.getHours()).padStart(2, '0');
+  const minutes = String(peruTime.getMinutes()).padStart(2, '0');
+  const seconds = String(peruTime.getSeconds()).padStart(2, '0');
+
+  return {
+    fecha: `${year}-${month}-${day}`,
+    hora: `${hours}:${minutes}:${seconds}`
+  };
+};
+  
   const getDateRangeForFilter = (filter) => {
     const today = getPeruDateTime().fecha;
     const todayDate = new Date(today);
@@ -889,24 +929,31 @@ const getStockDetailByDate = (fecha, modelo) => {
     t.modelo === modelo
   );
 
-  const items = [];
-  let total = 0;
-  let esCorreccion = false;
-
+  // Agrupar por hora (cada operación)
+  const operacionesPorHora = {};
   transactions.forEach(t => {
-    items.push({
+    if (!operacionesPorHora[t.hora]) {
+      operacionesPorHora[t.hora] = [];
+    }
+    operacionesPorHora[t.hora].push({
       color: t.color,
       talla: t.talla,
       cantidad: t.cantidad
     });
-    total += Math.abs(t.cantidad);
-    if (t.cantidad < 0) esCorreccion = true;
   });
+
+  // Convertir a array ordenado
+  const operaciones = Object.entries(operacionesPorHora)
+    .sort(([horaA], [horaB]) => horaA.localeCompare(horaB))
+    .map(([hora, items]) => ({ hora, items }));
+
+  const total = transactions.reduce((sum, t) => sum + t.cantidad, 0);
+  const esCorreccion = transactions.some(t => t.cantidad < 0);
 
   return {
     fecha: fecha,
     modelo: modelo,
-    items: items,
+    operaciones: operaciones,
     total: total,
     esCorreccion: esCorreccion
   };
@@ -3132,9 +3179,17 @@ const shareOrderViaWhatsApp = (sale) => {
                     
                     return (
                       <div key={talla} className="flex flex-col items-center gap-1">
-                        <label className="text-xs text-gray-500 font-medium">
-                          {talla} <span className="text-gray-400">({stockActual})</span>
-                        </label>
+                        <label className={`text-xs font-medium px-2 py-1 rounded ${
+                          stockActual >= 10
+                            ? 'bg-green-100 text-green-800'     // Verde: stock alto
+                            : stockActual >= 6
+                              ? 'bg-yellow-100 text-yellow-800' // Amarillo: stock medio
+                              : stockActual > 0
+                                ? 'bg-red-100 text-red-800'     // Rojo: stock bajo
+                                : 'bg-gray-100 text-gray-500'   // Gris: sin stock
+                      }`}>
+                        {talla} ({stockActual})
+                      </label>
                         
                         {/* Input unificado - acepta positivos y negativos */}
                         <input
@@ -3228,37 +3283,64 @@ const shareOrderViaWhatsApp = (sale) => {
         </p>
       </div>
 
-      {/* Detalle agrupado por color */}
-      <div className="mb-4 space-y-2 max-h-60 overflow-y-auto">
-        {(() => {
-          // Agrupar por color
-          const grouped = {};
-          stockDetailData.items.forEach(item => {
-            if (!grouped[item.color]) grouped[item.color] = [];
-            grouped[item.color].push(item);
-          });
+      {/* Detalle cronológico por operación */}
+<div className="mb-4 space-y-3 max-h-60 overflow-y-auto">
+  {stockDetailData.operaciones ? (
+    // Mostrar por operaciones (cuando se hace clic en tabla)
+    stockDetailData.operaciones.map((operacion, idx) => {
+      const grouped = {};
+      operacion.items.forEach(item => {
+        if (!grouped[item.color]) grouped[item.color] = [];
+        grouped[item.color].push(item);
+      });
 
-          return Object.entries(grouped).map(([color, items]) => (
+      return (
+        <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
+          <p className="text-xs text-gray-500 mb-1">{operacion.hora}</p>
+          {Object.entries(grouped).map(([color, items]) => (
             <div key={color} className="text-sm">
               <span className="font-medium">{color}:</span>{' '}
-              {items.map((item, idx) => (
-                <span key={idx}>
+              {items.map((item, i) => (
+                <span key={i}>
                   {item.talla}({item.cantidad > 0 ? '+' : ''}{item.cantidad})
-                  {idx < items.length - 1 ? ', ' : ''}
+                  {i < items.length - 1 ? ', ' : ''}
                 </span>
               ))}
             </div>
-          ));
-        })()}
-      </div>
+          ))}
+        </div>
+      );
+    })
+  ) : (
+    // Mostrar simple (modal de confirmación)
+    (() => {
+      const grouped = {};
+      stockDetailData.items.forEach(item => {
+        if (!grouped[item.color]) grouped[item.color] = [];
+        grouped[item.color].push(item);
+      });
+
+      return Object.entries(grouped).map(([color, items]) => (
+        <div key={color} className="text-sm">
+          <span className="font-medium">{color}:</span>{' '}
+          {items.map((item, idx) => (
+            <span key={idx}>
+              {item.talla}({item.cantidad > 0 ? '+' : ''}{item.cantidad})
+              {idx < items.length - 1 ? ', ' : ''}
+            </span>
+          ))}
+        </div>
+      ));
+    })()
+  )}
+</div>
 
       {/* Total */}
       <div className="pt-3 border-t">
         <div className="flex justify-between items-center">
           <span className="font-bold">TOTAL:</span>
           <span className="font-bold text-lg">
-            {stockDetailData.esCorreccion && stockDetailData.total !== 0 ? '±' : ''}
-            {stockDetailData.total}
+            {stockDetailData.total > 0 ? '+' : ''}{stockDetailData.total}
           </span>
         </div>
       </div>
