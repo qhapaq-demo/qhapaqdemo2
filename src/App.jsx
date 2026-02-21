@@ -3145,7 +3145,7 @@ const shareOrderViaWhatsApp = (sale) => {
             {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
               <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <p className="font-medium mb-2">{color}</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-4">
                   {['S', 'M', 'L', 'XL'].map(talla => {
                     const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
                     const stockActual = products.find(p => p.modelo === stockToAdd.modelo)?.stock?.[color]?.[talla] || 0;
