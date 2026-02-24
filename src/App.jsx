@@ -3570,7 +3570,7 @@ const getStockClientesReport = () => {
             <h4 className="font-bold mb-2 text-center bg-black text-white p-2 rounded text-sm">
               {productData.modelo}
             </h4>
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-xs md:text-sm border-collapse">
               <thead>
                 <tr className="bg-black text-white">
                   <th className="border border-white p-1 text-center text-xs">S</th>
@@ -3582,11 +3582,11 @@ const getStockClientesReport = () => {
               <tbody>
                 <tr>
                   {['S', 'M', 'L', 'XL'].map(talla => (
-                    <td key={talla} className="border p-3 align-top text-sm min-w-[150px]">
+                    <td key={talla} className="border p-2 align-top w-1/4">
                       {productData.colorsByTalla[talla]?.length > 0 ? (
                         <div className="space-y-2">
                           {productData.colorsByTalla[talla].map((color, i) => (
-                            <div key={i} className="bg-gray-100 border rounded px-2 py-1 text-sm">
+                            <div key={i} className="bg-gray-100 border rounded px-1.5 py-0.5 text-xs md:text-sm break-words">
                               {color}
                             </div>
                           ))}
