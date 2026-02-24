@@ -3582,13 +3582,13 @@ const getStockClientesReport = () => {
               <tbody>
                 <tr>
                   {['S', 'M', 'L', 'XL'].map(talla => (
-                    <td key={talla} className="border p-2 align-top text-xs">
+                    <td key={talla} className="border p-3 align-top text-sm min-w-[150px]">
                       {productData.colorsByTalla[talla]?.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           {productData.colorsByTalla[talla].map((color, i) => (
-                            <span key={i} className="inline-block bg-gray-100 border rounded-full px-2 py-0.5 text-xs mb-1">
+                            <div key={i} className="bg-gray-100 border rounded px-2 py-1 text-sm">
                               {color}
-                            </span>
+                            </div>
                           ))}
                         </div>
                       ) : (
