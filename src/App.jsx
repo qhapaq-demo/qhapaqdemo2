@@ -40,6 +40,14 @@ function App() {
   const [viewingSale, setViewingSale] = useState(null);
   const [showAddStock, setShowAddStock] = useState(false);
   const [showStockModal, setShowStockModal] = useState(null);
+  
+  // Estados para modales de reportes
+  const [showModalStockGeneral, setShowModalStockGeneral] = useState(false);
+  const [showModalStockClientes, setShowModalStockClientes] = useState(false);
+  const [showModalReporteVentas, setShowModalReporteVentas] = useState(false);
+  const [showModalAnalisisVentas, setShowModalAnalisisVentas] = useState(false);
+  const [vistaReporteVentas, setVistaReporteVentas] = useState('lista');
+  const [fechaSeleccionadaVentas, setFechaSeleccionadaVentas] = useState(null);
 
   // Estados para productos
   const [newProduct, setNewProduct] = useState({
@@ -135,6 +143,36 @@ useEffect(() => {
     
     return resultado;
   };
+
+// ============================================
+// FUNCIÓN HELPER: Encabezado PDF
+// ============================================
+const agregarEncabezadoPDF = (doc, titulo) => {
+  const pageWidth = doc.internal.pageSize.width;
+
+  // Logo más abajo
+  doc.addImage(logoABermud, 'JPEG', 14, 24, 26, 26);
+
+  // Nombre + slogan
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ABermud', 45, 35);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Lo bueno va contigo', 45, 40);
+
+  // Título centrado debajo del logo
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(titulo, pageWidth / 2, 56, { align: 'center' });
+
+  // Línea separadora
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.5);
+  doc.line(14, 58, pageWidth - 14, 58);
+
+  return 66; // yPos inicial
+};
 
   // ============================================
   // FUNCIÓN PARA DESCARGAR REPORTE EN PDF
@@ -294,6 +332,308 @@ useEffect(() => {
     // ── GUARDAR ───────────────────────────────────
     doc.save(`${tituloReporte.replace(/[\s/()]/g, '_')}.pdf`);
   };
+
+// ============================================
+// FUNCIONES DE GENERACIÓN DE PDF - REPORTES
+// ============================================
+
+// PDF 1: STOCK GENERAL
+const generarPDFStockGeneral = () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE STOCK - GENERAL');
+
+  // Fecha
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
+  doc.text(`FECHA: ${fecha}`, 14, yPos);
+  yPos += 10;
+
+  const reportData = getStockGeneralReport();
+
+  reportData.forEach((productData) => {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    doc.setFillColor(0, 0, 0);
+    doc.rect(14, yPos, 167, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(productData.modelo, pageWidth / 2, yPos + 5.5, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 12;
+
+    const tableData = Object.entries(productData.stockByColor).map(([color, tallas]) => [
+  color,
+  tallas.S || 0,
+  tallas.M || 0,
+  tallas.L || 0,
+  tallas.XL || 0  // ← AGREGAR
+]);
+
+   doc.autoTable({
+  startY: yPos,
+  head: [['COLOR', 'S', 'M', 'L', 'XL']],  // ← AGREGAR XL
+  body: tableData,
+  theme: 'grid',
+  headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // ← halign center aquí
+  styles: { fontSize: 9, cellPadding: 3 },
+  columnStyles: {
+    0: { cellWidth: 55 },
+    1: { halign: 'center', cellWidth: 28 },
+    2: { halign: 'center', cellWidth: 28 },
+    3: { halign: 'center', cellWidth: 28 },
+    4: { halign: 'center', cellWidth: 28 }  // ← XL
+  },
+  margin: { left: 14, right: 14 }
+});
+
+    yPos = doc.lastAutoTable.finalY + 10;
+  });
+
+  doc.save(`Stock_General_${fecha.replace(/\//g, '-')}.pdf`);
+};
+
+// PDF 2: STOCK CLIENTES
+const generarPDFStockClientes = () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE STOCK - CLIENTES');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
+  doc.text(`FECHA: ${fecha}`, 14, yPos);
+  doc.text('Colores disponibles (sin cantidades)', 14, yPos + 6);
+  yPos += 16;
+
+  const reportData = getStockClientesReport();
+
+  reportData.forEach((productData) => {
+    if (yPos > 240) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    doc.setFillColor(0, 0, 0);
+    doc.rect(14, yPos, 167, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(productData.modelo, pageWidth / 2, yPos + 5.5, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 12;
+
+const tableData = [[
+  productData.colorsByTalla.S?.join('\n') || '-',
+  productData.colorsByTalla.M?.join('\n') || '-',
+  productData.colorsByTalla.L?.join('\n') || '-',
+  productData.colorsByTalla.XL?.join('\n') || '-'
+]];
+
+doc.autoTable({
+  startY: yPos,
+  head: [['S', 'M', 'L', 'XL']],
+  body: tableData,
+  theme: 'grid',
+  headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+  styles: { fontSize: 9, cellPadding: 5, valign: 'top' },
+  columnStyles: {
+    0: { halign: 'left', cellWidth: 42 },
+    1: { halign: 'left', cellWidth: 42 },
+    2: { halign: 'left', cellWidth: 42 },
+    3: { halign: 'left', cellWidth: 42 }
+  },
+  margin: { left: 14, right: 14 }
+});
+
+    yPos = doc.lastAutoTable.finalY + 10;
+  });
+
+  doc.save(`Stock_Clientes_${fecha.replace(/\//g, '-')}.pdf`);
+};
+
+// PDF 3: REPORTE DE VENTAS
+const generarPDFReporteVentas = () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.width;
+  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE VENTAS');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
+  doc.text(`FECHA: ${fecha}`, 14, yPos);
+  const periodoText = reportFilter === 'hoy' ? 'Hoy' : `${customDateRange.start} a ${customDateRange.end}`;
+  doc.text(`Período: ${periodoText}`, 14, yPos + 6);
+  yPos += 16;
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('VENTAS POR MODELO', 14, yPos);
+  yPos += 8;
+
+  const { start, end } = getDateRangeForFilter(reportFilter);
+  const filteredSales = sales.filter(s => s.fecha >= start && s.fecha <= end);
+
+  const ventasPorFechaModelo = {};
+  const modelosSet = new Set();
+  products.filter(p => p.activo !== false).forEach(p => modelosSet.add(p.modelo));
+
+  filteredSales.forEach(sale => {
+    if (!ventasPorFechaModelo[sale.fecha]) ventasPorFechaModelo[sale.fecha] = {};
+    sale.items.forEach(item => {
+      if (!ventasPorFechaModelo[sale.fecha][item.modelo]) ventasPorFechaModelo[sale.fecha][item.modelo] = 0;
+      ventasPorFechaModelo[sale.fecha][item.modelo] += item.quantity;
+    });
+  });
+
+  const modelos = Array.from(modelosSet);
+  const tableHead = [['FECHA', ...modelos.map(m => abreviarNombreProducto(m)), 'TOTAL']];
+  const tableBody = [];
+  const fechas = Object.keys(ventasPorFechaModelo).sort();
+  const totalesPorModelo = {};
+  modelos.forEach(m => totalesPorModelo[m] = 0);
+
+  fechas.forEach(fecha => {
+    const row = [fecha.split('-').reverse().join('/')];
+    let totalFecha = 0;
+    modelos.forEach(modelo => {
+      const cantidad = ventasPorFechaModelo[fecha][modelo] || 0;
+      row.push(cantidad);
+      totalesPorModelo[modelo] += cantidad;
+      totalFecha += cantidad;
+    });
+    row.push(totalFecha);
+    tableBody.push(row);
+  });
+
+  const totalRow = ['TOTAL'];
+  let granTotal = 0;
+  modelos.forEach(modelo => {
+    totalRow.push(totalesPorModelo[modelo]);
+    granTotal += totalesPorModelo[modelo];
+  });
+  totalRow.push(granTotal);
+  tableBody.push(totalRow);
+
+  doc.autoTable({
+    startY: yPos,
+    head: tableHead,
+    body: tableBody,
+    theme: 'grid',
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 8, cellPadding: 2 },
+    columnStyles: { 0: { cellWidth: 25, fontStyle: 'bold' } },
+    didParseCell: (data) => {
+      if (data.row.index === tableBody.length - 1) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [240, 240, 240];
+      }
+    }
+  });
+
+  doc.save(`Reporte_Ventas_${fecha.replace(/\//g, '-')}.pdf`);
+};
+
+// PDF 4: ANÁLISIS DE VENTAS
+const generarPDFAnalisisVentas = () => {
+  const doc = new jsPDF();
+  let yPos = agregarEncabezadoPDF(doc, 'ANÁLISIS DE VENTAS');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
+  doc.text(`FECHA: ${fecha}`, 14, yPos);
+  const periodoText = reportFilter === 'hoy' ? 'Hoy' : `${customDateRange.start} a ${customDateRange.end}`;
+  doc.text(`Período: ${periodoText}`, 14, yPos + 6);
+  yPos += 16;
+
+  const analisis = getAnalisisVentasReport();
+
+  // SECCIÓN 1: POR MEDIO DE VENTA
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('POR MEDIO DE VENTA', 14, yPos);
+  yPos += 8;
+
+  const tablaMedio = [
+    ['TIENDA', analisis.porMedio.TIENDA?.toFixed(2) || '0.00'],
+    ['LIVE', analisis.porMedio.LIVE?.toFixed(2) || '0.00']
+  ];
+
+  doc.autoTable({
+    startY: yPos,
+    head: [['MEDIO', 'MONTO']],
+    body: tablaMedio,
+    theme: 'grid',
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 80 },
+      1: { halign: 'right', cellWidth: 40 }
+    },
+    margin: { left: 14 }
+  });
+
+  yPos = doc.lastAutoTable.finalY + 15;
+
+  // SECCIÓN 2: TOP 10 CLIENTES
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOP 10 CLIENTES', 14, yPos);
+  yPos += 8;
+
+  const tablaClientes = analisis.topClientes.map((c, idx) => [
+    `${idx + 1}`, c.nombre, c.total.toFixed(2)
+  ]);
+
+  doc.autoTable({
+    startY: yPos,
+    head: [['#', 'CLIENTE', 'MONTO']],
+    body: tablaClientes.length > 0 ? tablaClientes : [['', 'No hay datos', '']],
+    theme: 'grid',
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 15 },
+      1: { cellWidth: 90 },
+      2: { halign: 'right', cellWidth: 30 }
+    },
+    margin: { left: 14 }
+  });
+
+  yPos = doc.lastAutoTable.finalY + 15;
+
+  // SECCIÓN 3: POR DEPARTAMENTO
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('POR DEPARTAMENTO', 14, yPos);
+  yPos += 8;
+
+  const tablaDepartamento = Object.entries(analisis.porDepartamento)
+    .sort((a, b) => b[1] - a[1])
+    .map(([dept, monto]) => [dept, monto.toFixed(2)]);
+
+  doc.autoTable({
+    startY: yPos,
+    head: [['DEPARTAMENTO', 'MONTO']],
+    body: tablaDepartamento.length > 0 ? tablaDepartamento : [['No hay datos', '']],
+    theme: 'grid',
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 80 },
+      1: { halign: 'right', cellWidth: 40 }
+    },
+    margin: { left: 14 }
+  });
+
+  doc.save(`Analisis_Ventas_${fecha.replace(/\//g, '-')}.pdf`);
+};
 
   // ============================================
   // FUNCIONES DE CARGA DE DATOS DESDE SUPABASE
@@ -1215,7 +1555,9 @@ const shareOrderViaWhatsApp = (sale) => {
   // ============================================
 
   const getStockGeneralReport = () => {
-    return products.map(product => {
+  return products
+    .filter(product => product.activo !== false)
+    .map(product => {
       const stockByColor = {};
       let totalProduct = 0;
       
@@ -1233,13 +1575,15 @@ const shareOrderViaWhatsApp = (sale) => {
         stockByColor,
         total: totalProduct
       };
-    });
-  };
+    })
+    .sort((a, b) => b.total - a.total); // Ordenar de mayor a menor stock
+};
 
-  const getStockClientesReport = () => {
-    return products.map(product => {
+const getStockClientesReport = () => {
+  return products
+    .filter(product => product.activo !== false)
+    .map(product => {
       const colorsByTalla = {};
-      
       ['S', 'M', 'L', 'XL'].forEach(talla => {
         colorsByTalla[talla] = [];
         product.colors?.forEach(color => {
@@ -1249,13 +1593,24 @@ const shareOrderViaWhatsApp = (sale) => {
           }
         });
       });
-      
+
+      // Calcular total para ordenar igual que Stock General
+      let totalProduct = 0;
+      product.colors?.forEach(color => {
+        ['S', 'M', 'L', 'XL'].forEach(talla => {
+          totalProduct += product.stock?.[color]?.[talla] || 0;
+        });
+      });
+
       return {
         modelo: product.modelo,
-        colorsByTalla
+        colorsByTalla,
+        total: totalProduct
       };
-    });
-  };
+    })
+    .filter(p => p.total > 0) // Solo mostrar productos con stock disponible
+    .sort((a, b) => b.total - a.total);
+};
 
   const getVentasReport = () => {
     const { start, end } = getDateRangeForFilter(reportFilter);
@@ -1367,7 +1722,7 @@ const shareOrderViaWhatsApp = (sale) => {
     
     const topClientes = Object.entries(porCliente)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
+      .slice(0, 10)
       .map(([nombre, total]) => ({ nombre, total }));
     
     // Por departamento
@@ -1388,6 +1743,402 @@ const shareOrderViaWhatsApp = (sale) => {
       totalVentas: filteredSales.reduce((sum, s) => sum + s.total, 0)
     };
   };
+
+  const DetalleVentas = ({ fechaSeleccionada, sales, products, onVolver, onCerrar }) => {
+    const [filtroDetalle, setFiltroDetalle] = React.useState('dia');
+    const [rangoPersonalizado, setRangoPersonalizado] = React.useState({
+      start: fechaSeleccionada,
+      end: fechaSeleccionada
+    });
+
+    const ventasFiltradas = filtroDetalle === 'dia'
+      ? sales.filter(s => s.fecha === fechaSeleccionada)
+      : sales.filter(s => s.fecha >= rangoPersonalizado.start && s.fecha <= rangoPersonalizado.end);
+
+    const totalGeneral = ventasFiltradas.reduce((sum, s) => sum + s.total, 0);
+    const modelosActivos = products.filter(p => p.activo !== false).map(p => p.modelo);
+    const fechasEnRango = [...new Set(ventasFiltradas.map(s => s.fecha))].sort((a, b) => b.localeCompare(a));
+
+    const ventasPorFechaModelo = {};
+    fechasEnRango.forEach(f => { ventasPorFechaModelo[f] = {}; });
+    ventasFiltradas.forEach(sale => {
+      sale.items.forEach(item => {
+        ventasPorFechaModelo[sale.fecha][item.modelo] =
+          (ventasPorFechaModelo[sale.fecha][item.modelo] || 0) + item.quantity;
+      });
+    });
+
+    const totalPorModelo = {};
+    modelosActivos.forEach(m => { totalPorModelo[m] = 0; });
+    ventasFiltradas.forEach(sale => {
+      sale.items.forEach(item => {
+        totalPorModelo[item.modelo] = (totalPorModelo[item.modelo] || 0) + item.quantity;
+      });
+    });
+
+    const modelosOrdenados = [...modelosActivos].sort((a, b) => (totalPorModelo[b] || 0) - (totalPorModelo[a] || 0));
+    const masVendido = modelosOrdenados.find(m => totalPorModelo[m] > 0);
+
+    return (
+      <>
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+          <button onClick={onVolver} className="flex items-center gap-1 text-gray-600 hover:text-black font-medium">
+            ‹ Volver a fechas
+          </button>
+          <h3 className="text-lg font-bold">Reporte de Ventas</h3>
+          <button onClick={onCerrar}><X size={24} /></button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-bold text-lg capitalize">
+                {new Date(fechaSeleccionada + 'T12:00:00').toLocaleDateString('es-PE', {
+                  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              </p>
+              <p className="text-sm text-gray-500">
+                {ventasFiltradas.length} {ventasFiltradas.length === 1 ? 'venta' : 'ventas'} · Total:
+                <span className="font-bold text-emerald-600"> S/ {totalGeneral.toFixed(2)}</span>
+              </p>
+            </div>
+            {masVendido && (
+              <div className="bg-orange-500 text-white text-xs px-3 py-2 rounded-lg text-right">
+                🔥 Más vendido<br />
+                <span className="font-bold">{masVendido}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-gray-800 text-white p-3 flex items-center justify-between">
+              <span className="font-bold text-sm">📊 VENTAS POR MODELO</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-300">Filtrar por:</span>
+                <button
+                  onClick={() => setFiltroDetalle('dia')}
+                  className={`px-2 py-1 rounded ${filtroDetalle === 'dia' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
+                >
+                  Hoy
+                </button>
+                <button
+                  onClick={() => setFiltroDetalle('personalizado')}
+                  className={`px-2 py-1 rounded ${filtroDetalle === 'personalizado' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
+                >
+                  Personalizado
+                </button>
+              </div>
+            </div>
+
+            {filtroDetalle === 'personalizado' && (
+              <div className="bg-gray-50 p-3 flex gap-3 items-center text-sm border-b flex-wrap">
+                <span className="text-gray-600">Desde:</span>
+                <input type="date" value={rangoPersonalizado.start}
+                  onChange={e => setRangoPersonalizado(r => ({ ...r, start: e.target.value }))}
+                  className="border rounded px-2 py-1 text-sm" />
+                <span className="text-gray-600">Hasta:</span>
+                <input type="date" value={rangoPersonalizado.end}
+                  onChange={e => setRangoPersonalizado(r => ({ ...r, end: e.target.value }))}
+                  className="border rounded px-2 py-1 text-sm" />
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-3 text-left border-r font-bold">FECHA</th>
+                    {modelosOrdenados.map(m => (
+                      // DESPUÉS
+                      <th key={m} className="p-3 text-center font-bold">
+                        {abreviarNombreProducto(m)}
+                      </th>
+                    ))}
+                    <th className="p-3 text-center font-bold bg-gray-200">TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fechasEnRango.length === 0 ? (
+                    <tr>
+                      <td colSpan={modelosOrdenados.length + 2} className="p-6 text-center text-gray-400">
+                        Sin ventas en este período
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {fechasEnRango.map((fecha, idx) => {
+                        const filaTotal = modelosOrdenados.reduce((sum, m) =>
+                          sum + (ventasPorFechaModelo[fecha]?.[m] || 0), 0);
+                        return (
+                          <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="p-3 border-r font-medium whitespace-nowrap">
+                              {new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
+                                weekday: 'short', day: '2-digit', month: '2-digit'
+                              })}
+                            </td>
+                            {modelosOrdenados.map(m => {
+                              const cant = ventasPorFechaModelo[fecha]?.[m] || 0;
+                              return (
+                                <td key={m} className={`p-3 text-center ${cant > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
+                                  {cant}
+                                </td>
+                              );
+                            })}
+                            <td className="p-3 text-center font-bold bg-gray-100">{filaTotal}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-black text-white">
+                        <td className="p-3 font-bold border-r">TOTAL</td>
+                        {modelosOrdenados.map(m => (
+                          <td key={m} className="p-3 text-center font-bold">{totalPorModelo[m] || 0}</td>
+                        ))}
+                        <td className="p-3 text-center font-bold">
+                          {modelosOrdenados.reduce((sum, m) => sum + (totalPorModelo[m] || 0), 0)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+ const AnalisisVentas = ({ sales, clients, onCerrar }) => {
+  const [filtroAnalisis, setFiltroAnalisis] = React.useState('hoy');
+  const [rangoAnalisis, setRangoAnalisis] = React.useState({
+    start: getPeruDateTime().fecha,
+    end: getPeruDateTime().fecha
+  });
+
+  const ventasFiltradas = filtroAnalisis === 'hoy'
+    ? sales.filter(s => s.fecha === getPeruDateTime().fecha)
+    : sales.filter(s => s.fecha >= rangoAnalisis.start && s.fecha <= rangoAnalisis.end);
+
+  const medios = [...new Set(sales.map(s => s.sales_channel || 'TIENDA'))].sort();
+  const fechasOrdenadas = [...new Set(ventasFiltradas.map(s => s.fecha))].sort((a, b) => b.localeCompare(a));
+
+  // Por fecha × medio
+  const porFechaMedia = {};
+  fechasOrdenadas.forEach(f => { porFechaMedia[f] = {}; });
+  ventasFiltradas.forEach(sale => {
+    const medio = sale.sales_channel || 'TIENDA';
+    if (!porFechaMedia[sale.fecha][medio]) porFechaMedia[sale.fecha][medio] = { cantidad: 0, monto: 0 };
+    porFechaMedia[sale.fecha][medio].cantidad += 1;
+    porFechaMedia[sale.fecha][medio].monto += sale.total;
+  });
+
+  const totalPorMedio = {};
+  medios.forEach(m => {
+    const ventas = ventasFiltradas.filter(s => (s.sales_channel || 'TIENDA') === m);
+    totalPorMedio[m] = {
+      cantidad: ventas.length,
+      monto: ventas.reduce((s, v) => s + v.total, 0)
+    };
+  });
+
+  // Clientes completos
+  const porCliente = {};
+  ventasFiltradas.forEach(sale => {
+    if (!porCliente[sale.client_name]) porCliente[sale.client_name] = { cantidad: 0, monto: 0 };
+    porCliente[sale.client_name].cantidad += sale.items.reduce((s, i) => s + i.quantity, 0);
+    porCliente[sale.client_name].monto += sale.total;
+  });
+  const clientesOrdenados = Object.entries(porCliente).sort((a, b) => b[1].monto - a[1].monto);
+
+  // Por departamento simple
+  const porDepto = {};
+  ventasFiltradas.forEach(sale => {
+    const cliente = clients.find(c => c.nombre === sale.client_name);
+    const depto = cliente?.departamento || 'Sin especificar';
+    if (!porDepto[depto]) porDepto[depto] = { cantidad: 0, monto: 0 };
+    porDepto[depto].cantidad += 1;
+    porDepto[depto].monto += sale.total;
+  });
+  const deptosOrdenados = Object.entries(porDepto).sort((a, b) => b[1].monto - a[1].monto);
+
+  const formatFecha = (fecha) => new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
+    weekday: 'short', day: '2-digit', month: '2-digit'
+  });
+
+  return (
+    <div className="p-4 space-y-4">
+
+      {/* Filtros */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-gray-500">Filtrar por:</span>
+        <button onClick={() => setFiltroAnalisis('hoy')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filtroAnalisis === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          Hoy
+        </button>
+        <button onClick={() => setFiltroAnalisis('personalizado')}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filtroAnalisis === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          Personalizado
+        </button>
+      </div>
+
+      {filtroAnalisis === 'personalizado' && (
+        <div className="flex gap-3 items-center text-sm flex-wrap bg-gray-50 p-3 rounded-lg">
+          <span className="text-gray-600">Desde:</span>
+          <input type="date" value={rangoAnalisis.start}
+            onChange={e => setRangoAnalisis(r => ({ ...r, start: e.target.value }))}
+            className="border rounded px-2 py-1 text-sm" />
+          <span className="text-gray-600">Hasta:</span>
+          <input type="date" value={rangoAnalisis.end}
+            onChange={e => setRangoAnalisis(r => ({ ...r, end: e.target.value }))}
+            className="border rounded px-2 py-1 text-sm" />
+        </div>
+      )}
+
+      {/* TABLA 1: Ventas por Medio con fechas */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="bg-gray-800 text-white p-3">
+          <span className="font-bold text-sm">📊 VENTAS POR MEDIO</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-3 text-left font-bold border-r">FECHA</th>
+                {medios.map(m => (
+                  <th key={m} colSpan={2} className="p-3 text-center font-bold border-r">{m}</th>
+                ))}
+                <th className="p-3 text-center font-bold bg-gray-200">TOTAL</th>
+              </tr>
+              <tr className="bg-gray-50 text-xs text-gray-500">
+                <th className="p-2 border-r"></th>
+                {medios.map(m => (
+                  <React.Fragment key={m}>
+                    <th className="p-2 text-center">Ventas</th>
+                    <th className="p-2 text-center border-r">Monto</th>
+                  </React.Fragment>
+                ))}
+                <th className="p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {fechasOrdenadas.length === 0 ? (
+                <tr><td colSpan={medios.length * 2 + 2} className="p-4 text-center text-gray-400">Sin ventas en este período</td></tr>
+              ) : (
+                <>
+                  {fechasOrdenadas.map((fecha, idx) => {
+                    const filaTotal = medios.reduce((s, m) => s + (porFechaMedia[fecha][m]?.cantidad || 0), 0);
+                    return (
+                      <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="p-3 font-medium whitespace-nowrap border-r">{formatFecha(fecha)}</td>
+                        {medios.map(m => {
+                          const data = porFechaMedia[fecha][m];
+                          return (
+                            <React.Fragment key={m}>
+                              <td className={`p-3 text-center ${data?.cantidad > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
+                                {data?.cantidad || 0}
+                              </td>
+                              <td className={`p-3 text-center border-r ${data?.monto > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                                {data?.monto ? `S/ ${data.monto.toFixed(2)}` : '-'}
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                        <td className="p-3 text-center font-bold bg-gray-100">{filaTotal}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-black text-white">
+                    <td className="p-3 font-bold border-r">TOTAL</td>
+                    {medios.map(m => (
+                      <React.Fragment key={m}>
+                        <td className="p-3 text-center font-bold">{totalPorMedio[m]?.cantidad || 0}</td>
+                        <td className="p-3 text-center font-bold border-r">S/ {(totalPorMedio[m]?.monto || 0).toFixed(2)}</td>
+                      </React.Fragment>
+                    ))}
+                    <td className="p-3 text-center font-bold">{ventasFiltradas.length}</td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* TABLA 2: Clientes completos */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="bg-gray-800 text-white p-3 flex justify-between items-center">
+          <span className="font-bold text-sm">👥 CLIENTES</span>
+          <span className="text-xs text-gray-400">{clientesOrdenados.length} clientes</span>
+        </div>
+        <div className="max-h-64 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0">
+              <tr className="bg-gray-100">
+                <th className="p-3 text-center font-bold">#</th>
+                <th className="p-3 text-left font-bold">CLIENTE</th>
+                <th className="p-3 text-center font-bold">UNIDADES</th>
+                <th className="p-3 text-center font-bold">MONTO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientesOrdenados.length === 0 ? (
+                <tr><td colSpan={4} className="p-4 text-center text-gray-400">Sin ventas en este período</td></tr>
+              ) : (
+                clientesOrdenados.map(([nombre, data], idx) => (
+                  <tr key={nombre} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="p-3 text-center text-gray-500">{idx + 1}</td>
+                    <td className="p-3 font-medium">{nombre}</td>
+                    <td className="p-3 text-center">{data.cantidad}</td>
+                    <td className="p-3 text-center text-emerald-600 font-bold">S/ {data.monto.toFixed(2)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* TABLA 3: Por departamento simple */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="bg-gray-800 text-white p-3">
+          <span className="font-bold text-sm">📍 POR DEPARTAMENTO</span>
+        </div>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-3 text-left font-bold">DEPARTAMENTO</th>
+              <th className="p-3 text-center font-bold">VENTAS</th>
+              <th className="p-3 text-center font-bold">MONTO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deptosOrdenados.length === 0 ? (
+              <tr><td colSpan={3} className="p-4 text-center text-gray-400">Sin ventas en este período</td></tr>
+            ) : (
+              <>
+                {deptosOrdenados.map(([depto, data], idx) => (
+                  <tr key={depto} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="p-3 font-medium">{depto}</td>
+                    <td className="p-3 text-center">{data.cantidad}</td>
+                    <td className="p-3 text-center text-emerald-600 font-bold">S/ {data.monto.toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-black text-white">
+                  <td className="p-3 font-bold">TOTAL</td>
+                  <td className="p-3 text-center font-bold">{ventasFiltradas.length}</td>
+                  <td className="p-3 text-center font-bold">
+                    S/ {ventasFiltradas.reduce((s, v) => s + v.total, 0).toFixed(2)}
+                  </td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  );
+};
 
   if (loading) {
     return (
@@ -2589,326 +3340,350 @@ const shareOrderViaWhatsApp = (sale) => {
     </div>
   </div>
 )}
+
 {/* ============================================ */}
-{/* TAB: REPORTES */}
-        {activeTab === 'reportes' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Reportes y Análisis</h2>
-            
-            {/* Filtros Compartidos */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border">
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => setReportFilter('hoy')}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
-                >
-                  Hoy
-                </button>
-                <button
-                  onClick={() => setReportFilter('personalizado')}
-                  className={`px-4 py-2 rounded-lg font-medium ${
-                    reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
-                >
-                  Personalizado
-                </button>
+{/* TAB: REPORTES - PANEL SIMPLE */}
+{activeTab === 'reportes' && (
+  <div className="space-y-6">
+    <h2 className="text-2xl font-bold">Reportes y Análisis</h2>
+    
+    {/* Filtros Compartidos */}
+    <div className="bg-white p-4 rounded-xl shadow-sm border">
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => setReportFilter('hoy')}
+          className={`px-4 py-2 rounded-lg font-medium ${
+            reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+          }`}
+        >
+          Hoy
+        </button>
+        <button
+          onClick={() => setReportFilter('personalizado')}
+          className={`px-4 py-2 rounded-lg font-medium ${
+            reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+          }`}
+        >
+          Personalizado
+        </button>
 
-                {reportFilter === 'personalizado' && (
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="date"
-                      value={customDateRange.start}
-                      onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
-                      className="px-3 py-2 border rounded-lg"
-                    />
-                    <span>a</span>
-                    <input
-                      type="date"
-                      value={customDateRange.end}
-                      onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
-                      className="px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* REPORTE 1: Stock General */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">📦 REPORTE DE STOCK - GENERAL</h3>
-                <span className="text-sm text-gray-500">Fecha: {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
-              </div>
-              <div className="space-y-4">
-                {getStockGeneralReport().map((productData, idx) => (
-                  <div key={idx} className="border rounded-lg p-4">
-                    <h4 className="font-bold mb-3 text-center bg-black text-white p-2 rounded">{productData.modelo}</h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="bg-black text-white">
-                            <th className="border border-white p-2 text-left font-bold">COLOR</th>
-                            <th className="border border-white p-2 text-center font-bold">S</th>
-                            <th className="border border-white p-2 text-center font-bold">M</th>
-                            <th className="border border-white p-2 text-center font-bold">L</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.entries(productData.stockByColor).map(([color, tallas]) => (
-                            <tr key={color}>
-                              <td className="border p-1 font-medium">{color}</td>
-                              {['S', 'M', 'L'].map(talla => {
-                                const cantidad = tallas[talla] || 0;
-                                const bgColor = cantidad > 20 ? 'bg-green-100' : cantidad >= 10 ? 'bg-yellow-100' : 'bg-red-100';
-                                return (
-                                  <td key={talla} className={`border p-1.5 text-center font-medium ${bgColor}`}>
-                                    {cantidad}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-                <p className="text-sm font-bold">Resumen General de Inventario:</p>
-                <p className="text-xl font-bold text-emerald-600">S/ {totalInventoryValue.toFixed(2)}</p>
-              </div>
-            </div>
-
-            {/* REPORTE 2: Stock para Clientes */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">👥 REPORTE DE STOCK - CLIENTES</h3>
-                <span className="text-sm text-gray-500">Colores disponibles (sin cantidades)</span>
-              </div>
-              <div className="space-y-4">
-                {getStockClientesReport().map((productData, idx) => (
-                  <div key={idx} className="border rounded-lg p-4">
-                    <h4 className="font-bold mb-3 text-center bg-black text-white p-2 rounded">{productData.modelo}</h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="bg-black text-white">
-                            <th className="border border-white p-2 text-center font-bold">S</th>
-                            <th className="border border-white p-2 text-center font-bold">M</th>
-                            <th className="border border-white p-2 text-center font-bold">L</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            {['S', 'M', 'L'].map(talla => (
-                              <td key={talla} className="border p-2 text-center">
-                                {productData.colorsByTalla[talla]?.join(', ') || '-'}
-                              </td>
-                            ))}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* REPORTE 3: Reporte de Ventas (TOP 3 + Tabla) */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">🏆 REPORTE DE VENTAS</h3>
-                <span className="text-sm text-gray-500">
-                  {(() => {
-                    const { top3, totalVentas, totalMonto } = getVentasReport();
-                    return `${totalVentas} ventas · Total: S/ ${totalMonto.toFixed(2)}`;
-                  })()}
-                </span>
-              </div>
-              
-              {/* TOP 3 Destacado */}
-              <div className="mb-6 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
-                <h4 className="font-bold mb-3 text-center">🥇 TOP 3 MÁS VENDIDOS</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {getVentasReport().top3.map((item, index) => (
-                    <div key={index} className="bg-white p-4 rounded-lg border-2 border-yellow-300">
-                      <div className="text-center">
-                        <p className="text-3xl font-bold text-yellow-600 mb-1">
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'} {index + 1}º
-                        </p>
-                        <p className="font-bold text-lg">{item.modelo}</p>
-                        <p className="text-2xl font-bold text-emerald-600 mt-2">{item.cantidad} unidades</p>
-                        <p className="text-sm font-bold">S/ {item.total.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tabla de Ventas Detalladas */}
-              <div>
-                <h4 className="font-bold mb-3">📋 VENTAS DETALLADAS</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-black text-white">
-                        <th className="border border-white p-2 text-left font-bold">FECHA</th>
-                        <th className="border border-white p-2 text-center font-bold">VENTAS S/</th>
-                        <th className="border border-white p-2 text-center font-bold">GANANCIA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(getVentasReport().ventasPorFecha).map(([fecha, data]) => (
-                        <tr key={fecha}>
-                          <td className="border p-1.5">{fecha.split('-').reverse().join('/')}</td>
-                          <td className="border p-1.5 text-center font-bold">S/ {data.ventas.toFixed(2)}</td>
-                          <td className="border p-1.5 text-center font-bold text-emerald-600">S/ {data.ganancia.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-100 font-bold">
-                        <td className="border p-2">TOTAL</td>
-                        <td className="border p-2 text-center">
-                          S/ {Object.values(getVentasReport().ventasPorFecha).reduce((sum, d) => sum + d.ventas, 0).toFixed(2)}
-                        </td>
-                        <td className="border p-2 text-center text-emerald-600">
-                          S/ {Object.values(getVentasReport().ventasPorFecha).reduce((sum, d) => sum + d.ganancia, 0).toFixed(2)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* REPORTE 5: Análisis de Ventas Unificado */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border">
-              <h3 className="text-lg font-bold mb-4">📈 ANÁLISIS DE VENTAS</h3>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Por Medio de Venta */}
-                <div>
-                  <h4 className="font-bold mb-3 flex items-center gap-2">
-                    <ShoppingCart size={18} />
-                    Por Medio de Venta
-                  </h4>
-                  {(() => {
-                    const { porMedio, totalVentas } = getAnalisisVentasReport();
-                    const totalMedio = porMedio.LIVE + porMedio.TIENDA;
-                    
-                    return (
-                      <div className="space-y-3">
-                        <div className="p-3 bg-purple-50 rounded-lg border-2 border-purple-300">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-sm font-medium">LIVE</p>
-                            <p className="text-sm text-gray-500">
-                              {totalMedio > 0 ? ((porMedio.LIVE / totalMedio) * 100).toFixed(0) : 0}%
-                            </p>
-                          </div>
-                          <p className="text-xl font-bold">S/ {porMedio.LIVE.toFixed(2)}</p>
-                          <div className="w-full bg-purple-200 rounded-full h-1 mt-2">
-                            <div 
-                              className="bg-purple-600 h-1 rounded-full" 
-                              style={{width: `${totalMedio > 0 ? (porMedio.LIVE / totalMedio) * 100 : 0}%`}}
-                            ></div>
-                          </div>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded-lg border-2 border-blue-300">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-sm font-medium">TIENDA</p>
-                            <p className="text-sm text-gray-500">
-                              {totalMedio > 0 ? ((porMedio.TIENDA / totalMedio) * 100).toFixed(0) : 0}%
-                            </p>
-                          </div>
-                          <p className="text-xl font-bold">S/ {porMedio.TIENDA.toFixed(2)}</p>
-                          <div className="w-full bg-blue-200 rounded-full h-1 mt-2">
-                            <div 
-                              className="bg-blue-600 h-1 rounded-full" 
-                              style={{width: `${totalMedio > 0 ? (porMedio.TIENDA / totalMedio) * 100 : 0}%`}}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Top Clientes */}
-                <div>
-                  <h4 className="font-bold mb-3 flex items-center gap-2">
-                    <Users size={18} />
-                    Top 5 Clientes
-                  </h4>
-                  {(() => {
-                    const { topClientes } = getAnalisisVentasReport();
-                    
-                    return (
-                      <div className="space-y-2">
-                        {topClientes.map((cliente, idx) => (
-                          <div key={idx} className="p-2 bg-gray-50 rounded border flex justify-between items-center">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="font-bold text-lg text-gray-400">#{idx + 1}</span>
-                              <span className="text-sm font-medium truncate">{cliente.nombre}</span>
-                            </div>
-                            <span className="text-sm font-bold whitespace-nowrap ml-2">S/ {cliente.total.toFixed(2)}</span>
-                          </div>
-                        ))}
-                        {topClientes.length === 0 && (
-                          <p className="text-sm text-gray-500 text-center py-4">No hay datos</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Por Departamento */}
-                <div>
-                  <h4 className="font-bold mb-3 flex items-center gap-2">
-                    <TrendingUp size={18} />
-                    Por Departamento
-                  </h4>
-                  {(() => {
-                    const { porDepartamento } = getAnalisisVentasReport();
-                    const total = Object.values(porDepartamento).reduce((sum, val) => sum + val, 0);
-                    
-                    return (
-                      <div className="space-y-2">
-                        {Object.entries(porDepartamento)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([dept, amount]) => (
-                            <div key={dept} className="p-2 bg-gray-50 rounded border">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-medium truncate">{dept}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold">S/ {amount.toFixed(2)}</span>
-                                  <span className="text-sm text-gray-500">
-                                    {total > 0 ? ((amount / total) * 100).toFixed(0) : 0}%
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-1">
-                                <div 
-                                  className="bg-emerald-600 h-1 rounded-full" 
-                                  style={{width: `${total > 0 ? (amount / total) * 100 : 0}%`}}
-                                ></div>
-                              </div>
-                            </div>
-                          ))}
-                        {Object.keys(porDepartamento).length === 0 && (
-                          <p className="text-sm text-gray-500 text-center py-4">No hay datos</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
+        {reportFilter === 'personalizado' && (
+          <div className="flex gap-2 items-center">
+            <input
+              type="date"
+              value={customDateRange.start}
+              onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
+              className="px-3 py-2 border rounded-lg"
+            />
+            <span>a</span>
+            <input
+              type="date"
+              value={customDateRange.end}
+              onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
+              className="px-3 py-2 border rounded-lg"
+            />
           </div>
         )}
+      </div>
+    </div>
+
+    {/* Panel de Reportes - 4 Tarjetas */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      {/* Tarjeta 1: Stock General */}
+      <div className="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-sm border">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold mb-1">Stock General</h3>
+            <p className="text-sm text-gray-600">Vista matricial con semaforización</p>
+          </div>
+          <FileText className="text-gray-400" size={24} />
+        </div>
+        <button
+          onClick={generarPDFStockGeneral}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+        >
+          <FileDown size={18} />
+          Exportar PDF
+        </button>
+        <button
+          onClick={() => setShowModalStockGeneral(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
+        >
+          <Eye size={18} />
+          Ver Vista Previa
+        </button>
+      </div>
+
+      {/* Tarjeta 2: Stock para Clientes */}
+      <div className="bg-gradient-to-br from-purple-100 to-white p-6 rounded-xl shadow-sm border">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold mb-1">Stock para Clientes</h3>
+            <p className="text-sm text-gray-600">Sin cantidades, solo colores</p>
+          </div>
+          <FileText className="text-gray-400" size={24} />
+        </div>
+        <button
+          onClick={generarPDFStockClientes}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+        >
+          <FileDown size={18} />
+          Exportar PDF
+        </button>
+        <button
+          onClick={() => setShowModalStockClientes(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
+        >
+          <Eye size={18} />
+          Ver Vista Previa
+        </button>
+      </div>
+
+      {/* Tarjeta 3: Reporte de Ventas */}
+      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold mb-1">Reporte de Ventas</h3>
+            <p className="text-sm text-gray-600">Por modelo</p>
+          </div>
+          <FileText className="text-emerald-600" size={24} />
+        </div>
+        <button
+          onClick={generarPDFReporteVentas}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+        >
+          <FileDown size={18} />
+          Exportar PDF
+        </button>
+        <button
+          onClick={() => setShowModalReporteVentas(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
+        >
+          <Eye size={18} />
+          Ver Vista Previa
+        </button>
+      </div>
+
+      {/* Tarjeta 4: Análisis de Ventas */}
+      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold mb-1">Análisis de Ventas</h3>
+            <p className="text-sm text-gray-600">Medio, clientes y departamento</p>
+          </div>
+          <FileText className="text-slate-600" size={24} />
+        </div>
+        <button
+          onClick={generarPDFAnalisisVentas}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+        >
+          <FileDown size={18} />
+          Exportar PDF
+        </button>
+        <button
+          onClick={() => setShowModalAnalisisVentas(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
+        >
+          <Eye size={18} />
+          Ver Vista Previa
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
+{/* MODAL: Stock General */}
+{showModalStockGeneral && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+        <h3 className="text-xl font-bold">📦 Stock General</h3>
+        <button
+          onClick={() => setShowModalStockGeneral(false)}
+          className="text-gray-500 hover:text-black"
+        >
+          <X size={24} />
+        </button>
+      </div>
+      
+      <div className="p-4 space-y-3">
+        {getStockGeneralReport().map((productData, idx) => (
+          <div key={idx} className="border rounded-lg p-4">
+            <h4 className="font-bold mb-3 text-center bg-black text-white p-2 rounded">
+              {productData.modelo}
+            </h4>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-black text-white">
+                  <th className="border border-white p-1 text-left">COLOR</th>
+                  <th className="border border-white p-1 text-center">S</th>
+                  <th className="border border-white p-1 text-center">M</th>
+                  <th className="border border-white p-1 text-center">L</th>
+                  <th className="border border-white p-1 text-center">XL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(productData.stockByColor).map(([color, tallas]) => (
+                  <tr key={color}>
+                    <td className="border p-1 text-sm">{color}</td>
+                    {['S', 'M', 'L', 'XL'].map(talla => {
+                      const cantidad = tallas[talla] || 0;
+                      const bgColor = cantidad > 10 ? 'bg-green-100' : cantidad >= 6 ? 'bg-yellow-100' : cantidad > 0 ? 'bg-red-100' : 'bg-gray-50';
+                      return (
+                        <td key={talla} className={`border p-1 text-center text-sm ${bgColor}`}>
+                          {cantidad}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+  
+{/* MODAL: Stock para Clientes */}
+{showModalStockClientes && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+        <h3 className="text-xl font-bold">👥 Stock para Clientes</h3>
+        <button
+          onClick={() => setShowModalStockClientes(false)}
+          className="text-gray-500 hover:text-black"
+        >
+          <X size={24} />
+        </button>
+      </div>
+      
+      <div className="p-4 space-y-3">
+        <p className="text-sm text-gray-600 italic">Colores disponibles (sin cantidades)</p>
+        
+        {getStockClientesReport().map((productData, idx) => (
+          <div key={idx} className="border rounded-lg p-3">
+            <h4 className="font-bold mb-2 text-center bg-black text-white p-2 rounded text-sm">
+              {productData.modelo}
+            </h4>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-black text-white">
+                  <th className="border border-white p-1 text-center text-xs">S</th>
+                  <th className="border border-white p-1 text-center text-xs">M</th>
+                  <th className="border border-white p-1 text-center text-xs">L</th>
+                  <th className="border border-white p-1 text-center text-xs">XL</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {['S', 'M', 'L', 'XL'].map(talla => (
+                    <td key={talla} className="border p-2 align-top text-xs">
+                      {productData.colorsByTalla[talla]?.length > 0 ? (
+                        <div className="space-y-1">
+                          {productData.colorsByTalla[talla].map((color, i) => (
+                            <span key={i} className="inline-block bg-gray-100 border rounded-full px-2 py-0.5 text-xs mb-1">
+                              {color}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-400">-</div>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: Reporte de Ventas */}
+{showModalReporteVentas && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+
+      {/* PANTALLA 1 */}
+      {vistaReporteVentas === 'lista' && (
+        <>
+          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+            <h3 className="text-xl font-bold">📊 Reporte de Ventas</h3>
+            <button onClick={() => setShowModalReporteVentas(false)}><X size={24} /></button>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-sm text-gray-500">Ventas por Fecha · Haz clic en una fecha para ver el detalle</p>
+            {Object.entries(
+              sales.reduce((acc, sale) => {
+                if (!acc[sale.fecha]) acc[sale.fecha] = { ventas: 0, total: 0 };
+                acc[sale.fecha].ventas += 1;
+                acc[sale.fecha].total += sale.total;
+                return acc;
+              }, {})
+            )
+              .sort((a, b) => b[0].localeCompare(a[0]))
+              .map(([fecha, data]) => (
+                <button key={fecha}
+                  onClick={() => { setFechaSeleccionadaVentas(fecha); setVistaReporteVentas('detalle'); }}
+                  className="w-full text-left border rounded-lg p-4 hover:bg-gray-50 flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-medium">
+                      📅 {new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-sm text-gray-500">{data.ventas} {data.ventas === 1 ? 'venta' : 'ventas'}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-emerald-600">S/ {data.total.toFixed(2)}</span>
+                    <span className="text-gray-400">›</span>
+                  </div>
+                </button>
+              ))}
+          </div>
+        </>
+      )}
+
+      {/* PANTALLA 2 */}
+      {vistaReporteVentas === 'detalle' && fechaSeleccionadaVentas && (
+        <DetalleVentas
+          fechaSeleccionada={fechaSeleccionadaVentas}
+          sales={sales}
+          products={products}
+          onVolver={() => setVistaReporteVentas('lista')}
+          onCerrar={() => setShowModalReporteVentas(false)}
+        />
+      )}
+
+    </div>
+  </div>
+)}
+
+{/* MODAL: Análisis de Ventas */}
+{showModalAnalisisVentas && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+        <h3 className="text-xl font-bold">📈 Análisis de Ventas</h3>
+        <button onClick={() => setShowModalAnalisisVentas(false)}><X size={24} /></button>
+      </div>
+      <AnalisisVentas
+        sales={sales}
+        clients={clients}
+        onCerrar={() => setShowModalAnalisisVentas(false)}
+      />
+    </div>
+  </div>
+)}
+
         {/* ============================================ */}
         {/* TAB: BACKUP */}
         {/* ============================================ */}
