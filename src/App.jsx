@@ -203,9 +203,23 @@ const agregarEncabezadoPDF = (doc, titulo) => {
 
     // ── TÍTULO DEL REPORTE ────────────────────────
     let tituloReporte = '';
-    if (tipoReporte === 'stock acumulado')  tituloReporte = `STOCK ACUMULADO AL ${fecha}`;
-    if (tipoReporte === 'movimientos')     tituloReporte = `MOVIMIENTOS DE STOCK AL ${fecha}`;
-    if (tipoReporte === 'salidas')      tituloReporte = `SALIDA - VENTAS AL ${fecha}`;
+    // Calcular rango real desde los datos
+const todasLasFechas = tipoReporte === 'movimientos'
+  ? Object.keys(getIngresoStockReport())
+  : tipoReporte === 'salidas'
+  ? Object.keys(getSalidaVentasReport())
+  : [fecha];
+
+const fechasOrdenadas = todasLasFechas.sort();
+const rangoTexto = fechasOrdenadas.length > 1
+  ? `${fechasOrdenadas[0].split('-').reverse().join('/')} AL ${fechasOrdenadas[fechasOrdenadas.length - 1].split('-').reverse().join('/')}`
+  : reportFilter === 'personalizado'
+  ? `${customDateRange.start.split('-').reverse().join('/')} AL ${customDateRange.end.split('-').reverse().join('/')}`
+  : fecha;
+
+    if (tipoReporte === 'stock acumulado') tituloReporte = `STOCK ACUMULADO AL ${rangoTexto}`;
+    if (tipoReporte === 'movimientos')     tituloReporte = `MOVIMIENTOS DE STOCK ${rangoTexto}`;
+    if (tipoReporte === 'salidas')         tituloReporte = `SALIDA (VENTAS) ${rangoTexto}`;
 
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(16);
@@ -214,9 +228,22 @@ const agregarEncabezadoPDF = (doc, titulo) => {
 
     // ── PREPARAR DATOS ────────────────────────────
     const stockData = getStockALaFechaReport();
-    const sortedProducts = [...products].sort((a, b) => {
-      return (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0);
-    });
+const ingresoData = getIngresoStockReport();
+const salidaData = getSalidaVentasReport();
+
+const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+  if (tipoReporte === 'movimientos') {
+    const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+    const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+    return totalB - totalA;
+  }
+  if (tipoReporte === 'salidas') {
+    const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+    const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+    return totalB - totalA;
+  }
+  return (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0);
+});
 
     const headers = ['FECHA', ...sortedProducts.map(p => p.modelo)];
     let bodyData = [];
@@ -1324,7 +1351,7 @@ const getStockDetailByDate = (fecha, modelo) => {
   const getStockALaFechaReport = () => {
     const stockByModel = {};
     
-    products.forEach(product => {
+    products.filter(p => p.activo !== false).forEach(product => {
       let total = 0;
       Object.values(product.stock || {}).forEach(tallas => {
         Object.values(tallas).forEach(cantidad => {
@@ -2205,6 +2232,7 @@ const getStockClientesReport = () => {
           <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2">
             {[
               { id: 'dashboard', icon: Home, label: 'Dashboard' },
+              { id: 'productos', icon: Package, label: 'Productos' },
               { id: 'inventario', icon: Package, label: 'Inventario' },
               { id: 'clientes', icon: Users, label: 'Clientes' },
               { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
@@ -2298,6 +2326,18 @@ const getStockClientesReport = () => {
 
             {/* 6 BOTONES PRINCIPALES - Estilo KeyFacil */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
+              {/* BOTÓN: PRODUCTOS */}
+              <button
+                onClick={() => setActiveTab('productos')}
+                className="group relative bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
+                    <FileText size={40} strokeWidth={2} />
+                </div>
+                <span className="font-bold text-xl">Productos</span>
+              </div>
+            </button>
               {/* BOTÓN: INVENTARIO */}
               <button
                 onClick={() => setActiveTab('inventario')}
@@ -2394,45 +2434,33 @@ const getStockClientesReport = () => {
             </div>
           </div>
         )}
-   
-        {/* ============================================ */}
-        {/* TAB: INVENTARIO */}
-        {/* ============================================ */}
-        {activeTab === 'inventario' && (
-          <div className="space-y-6">
-            {/* Actions Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-3">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Buscar productos..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddProduct(true)}
-                  className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
-                >
-                  <Plus size={20} />
-                  Agregar Producto
-                </button>
-                <button
-                  onClick={() => setShowAddStock(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
-                >
-                  <Plus size={20} />
-                  Agregar Stock
-                </button>
-              </div>
-            </div>
 
-            {/* Products Grid */}
+        {/* TAB: PRODUCTOS */}
+{activeTab === 'productos' && (
+  <div className="space-y-6">
+    <div className="flex flex-col sm:flex-row justify-between gap-3">
+      <div className="flex-1">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar productos..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+          />
+        </div>
+      </div>
+      <button
+        onClick={() => setShowAddProduct(true)}
+        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+      >
+        <Plus size={20} />
+        Agregar Producto
+      </button>
+    </div>
+
+    {/* Products Grid */}
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
   {[...filteredProducts]
   .sort((a, b) => {
@@ -2548,70 +2576,85 @@ const getStockClientesReport = () => {
   </div>
 )}
 
+      </div>
+    )}
+   
+        {/* ============================================ */}
+        {/* TAB: INVENTARIO */}
+        {/* ============================================ */}
+        {activeTab === 'inventario' && (
+          <div className="space-y-6">
+            {/* Actions Bar */}
+            <div className="flex flex-col sm:flex-row justify-between gap-3">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Buscar productos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddProduct(true)}
+                  className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+                >
+                  <Plus size={20} />
+                  Agregar Producto
+                </button>
+                <button
+                  onClick={() => setShowAddStock(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
+                >
+                  <Plus size={20} />
+                  Agregar Stock
+                </button>
+              </div>
+            </div>
+
       {/* REPORTES DE INVENTARIO */}
 <div className="mt-8 space-y-4">
   {/* Filtros */}
   <div className="bg-white rounded-xl shadow-sm border p-4">
     <div className="flex flex-wrap items-center gap-3">
       <h3 className="font-bold text-sm">Filtrar reportes:</h3>
-      <button
-        onClick={() => setReportFilter('hoy')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${
-          reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
-        }`}
-      >
+      <button onClick={() => setReportFilter('hoy')}
+        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
         Hoy
       </button>
-      <button
-        onClick={() => setReportFilter('personalizado')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${
-          reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
-        }`}
-      >
+      <button onClick={() => setReportFilter('personalizado')}
+        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
         Personalizado
       </button>
-
       {reportFilter === 'personalizado' && (
         <div className="flex gap-2 items-center">
-          <input
-            type="date"
-            value={customDateRange.start}
+          <input type="date" value={customDateRange.start}
             onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
-            className="px-2 py-1.5 border rounded-lg text-sm"
-          />
+            className="px-2 py-1.5 border rounded-lg text-sm" />
           <span className="text-sm">a</span>
-          <input
-            type="date"
-            value={customDateRange.end}
+          <input type="date" value={customDateRange.end}
             onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
-            className="px-2 py-1.5 border rounded-lg text-sm"
-          />
+            className="px-2 py-1.5 border rounded-lg text-sm" />
         </div>
       )}
     </div>
   </div>
 
-  {/* Reporte 1: STOCK ACUMULADO */}
+  {/* Reporte 1: STOCK ACUMULADO - orden: más stock a la izquierda */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-    <button
-  className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors"
->
-  <div className="flex items-center gap-2 flex-1">
-    <BarChart3 size={20} className="text-blue-600" />
-    <span className="font-bold text-left text-sm md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    
-    <button
-      onClick={() => setShowStockModal('stock_fecha')}
-      className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
-      title="Ver reporte"
-    >
-      <Eye size={20} className="text-gray-600" />
+    <button className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors">
+      <div className="flex items-center gap-2 flex-1">
+        <BarChart3 size={20} className="text-blue-600" />
+        <span className="font-bold text-left text-sm md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+      </div>
+      <button onClick={() => setShowStockModal('stock_fecha')} className="p-2 hover:bg-blue-200 rounded-lg transition-colors" title="Ver reporte">
+        <Eye size={20} className="text-gray-600" />
+      </button>
     </button>
-  </div>
-</button>
-    
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
@@ -2619,16 +2662,12 @@ const getStockClientesReport = () => {
             <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
               const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => {
-                const stockA = stockData[a.modelo] || 0;
-                const stockB = stockData[b.modelo] || 0;
-                return stockB - stockA; // Orden descendente
-              });
+              const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 text-left font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
-                 </th>
+                </th>
               ));
             })()}
           </tr>
@@ -2638,15 +2677,9 @@ const getStockClientesReport = () => {
             <td className="border p-1 font-medium">{getPeruDateTime().fecha.split('-').reverse().join('/')}</td>
             {(() => {
               const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => {
-                const stockA = stockData[a.modelo] || 0;
-                const stockB = stockData[b.modelo] || 0;
-                return stockB - stockA;
-              });
+              const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
               return sortedProducts.map(p => (
-                <td key={p.id} className="border p-2 text-center">
-                  {stockData[p.modelo] || 0}
-                </td>
+                <td key={p.id} className="border p-2 text-center">{stockData[p.modelo] || 0}</td>
               ));
             })()}
           </tr>
@@ -2655,47 +2688,36 @@ const getStockClientesReport = () => {
     </div>
   </div>
 
-  {/* Reporte 2: MOVIMIENTOS DE STOCK */}
+  {/* Reporte 2: MOVIMIENTOS DE STOCK - orden: más ingresos a la izquierda */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-    <button
-  className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors"
->
-  <div className="flex items-center gap-2 flex-1">
-    <Package size={20} className="text-green-600" />
-    <span className="font-bold text-left text-sm md:text-base">MOVIMIENTOS DE STOCK AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <button
-      onClick={() => descargarReportePDF('movimientos')}
-      className="p-2 hover:bg-green-200 rounded-lg transition-colors"
-      title="Descargar PDF"
-    >
-      <FileDown size={20} className="text-red-600" />
+    <button className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors">
+      <div className="flex items-center gap-2 flex-1">
+        <Package size={20} className="text-green-600" />
+        <span className="font-bold text-left text-sm md:text-base">MOVIMIENTOS DE STOCK AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={() => descargarReportePDF('movimientos')} className="p-2 hover:bg-green-200 rounded-lg transition-colors" title="Descargar PDF">
+          <FileDown size={20} className="text-red-600" />
+        </button>
+        <button onClick={() => setShowStockModal('movimientos')} className="p-2 hover:bg-green-200 rounded-lg transition-colors" title="Ver reporte">
+          <Eye size={20} className="text-gray-600" />
+        </button>
+      </div>
     </button>
-    <button
-      onClick={() => setShowStockModal('movimientos')}
-      className="p-2 hover:bg-green-200 rounded-lg transition-colors"
-      title="Ver reporte"
-    >
-      <Eye size={20} className="text-gray-600" />
-    </button>
-  </div>
-</button>
-    
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
-              const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => {
-                const stockA = stockData[a.modelo] || 0;
-                const stockB = stockData[b.modelo] || 0;
-                return stockB - stockA;
+              const ingresoData = getIngresoStockReport();
+              const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+                const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+                const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+                return totalB - totalA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 text-left font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -2706,113 +2728,88 @@ const getStockClientesReport = () => {
         <tbody>
           {(() => {
             const ingresoData = getIngresoStockReport();
-            const stockData = getStockALaFechaReport();
-            const sortedProducts = [...products].sort((a, b) => {
-              const stockA = stockData[a.modelo] || 0;
-              const stockB = stockData[b.modelo] || 0;
-              return stockB - stockA;
+            const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+              const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+              const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+              return totalB - totalA;
             });
-            
             return Object.keys(ingresoData).length > 0 ? (
-              Object.entries(ingresoData).map(([fecha, modelos]) => (
-                <tr key={fecha}>
-                  <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+              <>
+                {Object.entries(ingresoData).map(([fecha, modelos]) => (
+                  <tr key={fecha}>
+                    <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                    {sortedProducts.map(p => (
+                      <td key={p.id} className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
+                        onClick={() => {
+                          if (modelos[p.modelo] && (modelos[p.modelo].ingreso !== 0 || modelos[p.modelo].correccion !== 0)) {
+                            const detail = getStockDetailByDate(fecha, p.modelo);
+                            setStockDetailData(detail);
+                            setShowStockDetail(true);
+                          }
+                        }}>
+                        {modelos[p.modelo] ? (
+                          <div className="flex items-center justify-center gap-1">
+                            {modelos[p.modelo].ingreso !== 0 && <span className="text-sm">{modelos[p.modelo].ingreso}</span>}
+                            {modelos[p.modelo].correccion !== 0 && <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>}
+                            {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
+                          </div>
+                        ) : '-'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="bg-gray-50 font-bold">
+                  <td className="border p-2">TOTAL</td>
                   {sortedProducts.map(p => (
-                    <td 
-                      key={p.id} 
-                      className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
-                      onClick={() => {
-                        if (modelos[p.modelo] && (modelos[p.modelo].ingreso !== 0 || modelos[p.modelo].correccion !== 0)) {
-                          const detail = getStockDetailByDate(fecha, p.modelo);
-                          setStockDetailData(detail);
-                          setShowStockDetail(true);
-                        }
-                      }}
-                    >
-                      {modelos[p.modelo] ? (
-                        <div className="flex items-center justify-center gap-1">
-                          {modelos[p.modelo].ingreso !== 0 && (
-                            <span className="text-sm">{modelos[p.modelo].ingreso}</span>
-                          )}
-                          {modelos[p.modelo].correccion !== 0 && (
-                            <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>
-                          )}
-                          {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
-                        </div>
-                      ) : '-'}
+                    <td key={p.id} className="border p-2 text-center">
+                      {Object.values(ingresoData).reduce((sum, m) => sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0)}
                     </td>
                   ))}
                 </tr>
-              ))
+              </>
             ) : (
               <tr>
-                <td colSpan={products.length + 1} className="border p-4 text-center text-gray-500">
+                <td colSpan={products.filter(p => p.activo !== false).length + 1} className="border p-4 text-center text-gray-500">
                   No hay ingresos en este período
                 </td>
               </tr>
             );
-          })()}          
-          <tr className="bg-gray-50 font-bold">
-            <td className="border p-2">TOTAL</td>
-            {(() => {
-              const ingresoData = getIngresoStockReport();
-              const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
-              return sortedProducts.map(p => (
-                <td key={p.id} className="border p-2 text-center">
-                  {Object.values(ingresoData).reduce((sum, m) => 
-                    sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
-                  )}
-                </td>
-              ));
-            })()}
-          </tr>
+          })()}
         </tbody>
       </table>
     </div>
   </div>
 
-  {/* Reporte 3: SALIDA - VENTAS */}
+  {/* Reporte 3: SALIDA - VENTAS - orden: más vendidos a la izquierda */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-    <button
-  className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors"
->
-  <div className="flex items-center gap-2 flex-1">
-    <ShoppingCart size={20} className="text-red-600" />
-    <span className="font-bold text-left text-sm md:text-base">SALIDA - VENTAS AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <button
-      onClick={() => descargarReportePDF('salidas')}
-      className="p-2 hover:bg-red-200 rounded-lg transition-colors"
-      title="Descargar PDF"
-    >
-      <FileDown size={20} className="text-red-600" />
+    <button className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors">
+      <div className="flex items-center gap-2 flex-1">
+        <ShoppingCart size={20} className="text-red-600" />
+        <span className="font-bold text-left text-sm md:text-base">SALIDA - VENTAS AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={() => descargarReportePDF('salidas')} className="p-2 hover:bg-red-200 rounded-lg transition-colors" title="Descargar PDF">
+          <FileDown size={20} className="text-red-600" />
+        </button>
+        <button onClick={() => setShowStockModal('salidas')} className="p-2 hover:bg-red-200 rounded-lg transition-colors" title="Ver reporte">
+          <Eye size={20} className="text-gray-600" />
+        </button>
+      </div>
     </button>
-    <button
-      onClick={() => setShowStockModal('salidas')}
-      className="p-2 hover:bg-red-200 rounded-lg transition-colors"
-      title="Ver reporte"
-    >
-      <Eye size={20} className="text-gray-600" />
-    </button>
-  </div>
-</button>
-    
     <div className="p-2 overflow-x-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr className="bg-gray-100">
             <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
             {(() => {
-              const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => {
-                const stockA = stockData[a.modelo] || 0;
-                const stockB = stockData[b.modelo] || 0;
-                return stockB - stockA;
+              const salidaData = getSalidaVentasReport();
+              const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+                const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+                const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+                return totalB - totalA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 text-center font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -2823,45 +2820,38 @@ const getStockClientesReport = () => {
         <tbody>
           {(() => {
             const salidaData = getSalidaVentasReport();
-            const stockData = getStockALaFechaReport();
-            const sortedProducts = [...products].sort((a, b) => {
-              const stockA = stockData[a.modelo] || 0;
-              const stockB = stockData[b.modelo] || 0;
-              return stockB - stockA;
+            const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+              const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+              const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+              return totalB - totalA;
             });
-            
             return Object.keys(salidaData).length > 0 ? (
-              Object.entries(salidaData).map(([fecha, modelos]) => (
-                <tr key={fecha}>
-                  <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+              <>
+                {Object.entries(salidaData).map(([fecha, modelos]) => (
+                  <tr key={fecha}>
+                    <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                    {sortedProducts.map(p => (
+                      <td key={p.id} className="border p-1.5 text-center">{modelos[p.modelo] || '0'}</td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="bg-gray-50 font-bold">
+                  <td className="border p-2">TOTAL</td>
                   {sortedProducts.map(p => (
-                    <td key={p.id} className="border p-1.5 text-center">
-                      {modelos[p.modelo] || '0'}
+                    <td key={p.id} className="border p-2 text-center">
+                      {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
                     </td>
                   ))}
                 </tr>
-              ))
+              </>
             ) : (
               <tr>
-                <td colSpan={products.length + 1} className="border p-4 text-center text-gray-500">
+                <td colSpan={products.filter(p => p.activo !== false).length + 1} className="border p-4 text-center text-gray-500">
                   No hay ventas en este período
                 </td>
               </tr>
             );
           })()}
-          <tr className="bg-gray-50 font-bold">
-            <td className="border p-2">TOTAL</td>
-            {(() => {
-              const salidaData = getSalidaVentasReport();
-              const stockData = getStockALaFechaReport();
-              const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
-              return sortedProducts.map(p => (
-                <td key={p.id} className="border p-2 text-center">
-                  {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
-                </td>
-              ));
-            })()}
-          </tr>
         </tbody>
       </table>
     </div>
@@ -2912,13 +2902,23 @@ const getStockClientesReport = () => {
       `Stock Acumulado al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
     }
 
-    {showStockModal === 'movimientos' && 
-      `Movimientos de Stock al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
-    }
+    {showStockModal === 'movimientos' && (() => {
+  const datos = getIngresoStockReport();
+  const fechas = Object.keys(datos).sort();
+  const rango = fechas.length > 1
+    ? `${fechas[0].split('-').reverse().join('/')} AL ${fechas[fechas.length-1].split('-').reverse().join('/')}`
+    : getPeruDateTime().fecha.split('-').reverse().join('/');
+  return `Movimientos de Stock ${rango}`;
+})()}
 
-    {showStockModal === 'salidas' && 
-      `Salidas - Ventas al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
-    }
+{showStockModal === 'salidas' && (() => {
+  const datos = getSalidaVentasReport();
+  const fechas = Object.keys(datos).sort();
+  const rango = fechas.length > 1
+    ? `${fechas[0].split('-').reverse().join('/')} AL ${fechas[fechas.length-1].split('-').reverse().join('/')}`
+    : getPeruDateTime().fecha.split('-').reverse().join('/');
+  return `Salida (Ventas) ${rango}`;
+})()}
   </h2>
 
   {reportFilter === 'personalizado' && showStockModal !== 'stock_fecha' && (
@@ -2938,7 +2938,7 @@ const getStockClientesReport = () => {
                   </th>
                   {(() => {
                     const stockData = getStockALaFechaReport();
-                    const sortedProducts = [...products].sort((a, b) => {
+                    const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
                       const stockA = stockData[a.modelo] || 0;
                       const stockB = stockData[b.modelo] || 0;
                       return stockB - stockA;
@@ -2963,7 +2963,7 @@ const getStockClientesReport = () => {
       </td>
       {(() => {
         const stockData = getStockALaFechaReport();
-        const sortedProducts = [...products].sort((a, b) => {
+        const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
           const stockA = stockData[a.modelo] || 0;
           const stockB = stockData[b.modelo] || 0;
           return stockB - stockA;
@@ -2985,11 +2985,10 @@ const getStockClientesReport = () => {
 {showStockModal === 'movimientos' && (
   (() => {
     const ingresoData = getIngresoStockReport();
-    const stockData = getStockALaFechaReport();
-    const sortedProducts = [...products].sort((a, b) => {
-      const stockA = stockData[a.modelo] || 0;
-      const stockB = stockData[b.modelo] || 0;
-      return stockB - stockA;
+    const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+      const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+      const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+      return totalB - totalA;
     });
     
     return Object.keys(ingresoData).length > 0 ? (
@@ -3054,37 +3053,36 @@ const getStockClientesReport = () => {
 
                 {/* SALIDA - VENTAS */}
                 {showStockModal === 'salidas' && (
-                  (() => {
-                    const salidaData = getSalidaVentasReport();
-                    const stockData = getStockALaFechaReport();
-                    const sortedProducts = [...products].sort((a, b) => {
-                      const stockA = stockData[a.modelo] || 0;
-                      const stockB = stockData[b.modelo] || 0;
-                      return stockB - stockA;
-                    });
-                    
-                    return Object.keys(salidaData).length > 0 ? (
-                      Object.entries(salidaData).map(([fecha, modelos]) => (
-                        <tr key={fecha} className="even:bg-gray-50">
-                          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-                            {fecha.split('-').reverse().join('/')}
-                          </td>
-                          {sortedProducts.map(p => (
-                            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
-                              {modelos[p.modelo] || '0'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
-                          No hay ventas en este período
-                        </td>
-                      </tr>
-                    );
-                  })()
-                )}
+  (() => {
+    const salidaData = getSalidaVentasReport(); // ← FALTABA ESTO
+    const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+      const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+      const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+      return totalB - totalA;
+    });
+
+    return Object.keys(salidaData).length > 0 ? (
+      Object.entries(salidaData).map(([fecha, modelos]) => (
+        <tr key={fecha} className="even:bg-gray-50">
+          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
+            {fecha.split('-').reverse().join('/')}
+          </td>
+          {sortedProducts.map(p => (
+            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+              {modelos[p.modelo] || '-'}
+            </td>
+          ))}
+        </tr>
+      ))
+    ) : (
+      <tr>
+        <td colSpan={products.length + 1} className="border border-gray-300 p-4 md:p-8 text-center text-gray-500 text-xs md:text-sm">
+          No hay ventas en este período
+        </td>
+      </tr>
+    );
+  })()
+)}
                 {showStockModal === 'salidas' && (() => {
                   const salidaData = getSalidaVentasReport();
                   const stockData = getStockALaFechaReport();
@@ -4272,7 +4270,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
     <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4 sticky top-0 bg-white z-10 py-3 border-b">
-        <h2 className="text-xl font-bold">Nueva Venta</h2>
+        <h2 className="text-2xl md:text-xl font-bold">Nueva Venta</h2>
         <button onClick={() => {
           setShowAddSale(false);
           setSelectedProductModel(null);
@@ -4285,7 +4283,7 @@ const getStockClientesReport = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT: Product Selection */}
         <div>
-          <h3 className="font-bold mb-3">Productos</h3>
+          <h3 className="font-bold mb-3 text-lg md:text-base">Productos</h3>
           
           {/* Buscador de productos */}
           <div className="mb-3">
@@ -4362,8 +4360,8 @@ const getStockClientesReport = () => {
               )}
 
               <div className="text-left flex-1">
-                <p className="text-base font-medium">{product.modelo}</p>
-                <p className="text-sm text-emerald-600">
+                <p className="text-lg md:text-base font-medium">{product.modelo}</p>
+                <p className="text-base md:text-sm text-emerald-600">
                   S/ {product.precio_venta} - Stock: {totalStock}
                 </p>
               </div>
@@ -4404,8 +4402,8 @@ const getStockClientesReport = () => {
                       />
                     )}
                     <div className="flex-1">
-                      <p className="font-bold text-lg">{product.modelo}</p>
-                      <p className="text-sm text-emerald-400">S/ {product.precio_venta}</p>
+                      <p className="font-bold text-xl md:text-lg">{product.modelo}</p>
+                      <p className="text-base md:text-sm text-emerald-400">S/ {product.precio_venta}</p>
                     </div>
                   </div>
                 </div>
@@ -4430,7 +4428,7 @@ const getStockClientesReport = () => {
                           )
                           .map(color => (
                           <tr key={color} className="hover:bg-gray-50">
-                            <td className="border p-2 font-medium sticky left-0 bg-white">{color}</td>
+                            <td className="border p-2 font-medium sticky left-0 bg-white text-sm md:text-xs">{color}</td>
                             {['S', 'M', 'L', 'XL'].map(talla => {
                               const stockDisponible = product.stock?.[color]?.[talla] || 0;
                               const key = `${color}-${talla}`;
@@ -4544,11 +4542,11 @@ const getStockClientesReport = () => {
 
         {/* RIGHT: Cart & Checkout */}
         <div>
-          <h3 className="font-bold mb-3">Resumen de Compra</h3>
+          <h3 className="font-bold mb-3 text-lg md:text-base">Resumen de Compra</h3>
 
           {/* Client Selection */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Cliente *</label>
+            <label className="block text-base md:text-sm font-medium mb-1">Cliente *</label>
             <div className="relative">
               <input
                 type="text"
@@ -4659,7 +4657,7 @@ const getStockClientesReport = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setSalesChannel('LIVE')}
-                className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-base md:text-sm ${
                   salesChannel === 'LIVE'
                     ? 'bg-black text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
@@ -4669,7 +4667,7 @@ const getStockClientesReport = () => {
               </button>
               <button
                 onClick={() => setSalesChannel('TIENDA')}
-                className={`flex-1 py-2 rounded-lg font-medium text-sm ${
+                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-base md:text-sm ${
                   salesChannel === 'TIENDA'
                     ? 'bg-black text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
@@ -4741,7 +4739,7 @@ const getStockClientesReport = () => {
 
               <button
                 onClick={completeSale}
-                className="w-full px-4 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 text-sm"
+                className="w-full px-4 py-4 md:py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 text-base md:text-sm"
               >
                 Completar Venta
               </button>
