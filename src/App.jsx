@@ -40,6 +40,8 @@ function App() {
   const [viewingSale, setViewingSale] = useState(null);
   const [showAddStock, setShowAddStock] = useState(false);
   const [showStockModal, setShowStockModal] = useState(null);
+  const [showSaleConfirm, setShowSaleConfirm] = useState(false);
+  const [saleConfirmData, setSaleConfirmData] = useState(null);
   
   // Estados para modales de reportes
   const [showModalStockGeneral, setShowModalStockGeneral] = useState(false);
@@ -974,139 +976,125 @@ const addColorToProduct = (productObj) => {
   // FUNCIONES DE VENTAS
   // ============================================
 
-  const addToCart = (producto, color, talla, quantity) => {
-    if (quantity <= 0) return;
-    const stockDisponible = producto.stock?.[color]?.[talla] || 0;
-    if (quantity > stockDisponible) {
-      alert(`Solo hay ${stockDisponible} unidades disponibles de ${color} - ${talla}`);
-      return;
-    }
-    const newItem = {
-      productoId: producto.id,
-      modelo: producto.modelo,
-      color,
-      talla,
-      quantity,
-      precioVenta: producto.precio_venta,
-      subtotal: producto.precio_venta * quantity
-    };
-    setCart([...cart, newItem]);
-
-};
-
-  const removeFromCart = (index) => {
-    const newCart = cart.filter((_, i) => i !== index);
-    setCart(newCart);
-  };
-
   const completeSale = async () => {
-  if (cart.length === 0) {
-    alert('El carrito está vacío');
-    return;
-  }
+  if (cart.length === 0) { alert('El carrito está vacío'); return; }
+  if (!selectedClient) { alert('Por favor selecciona un cliente'); return; }
+  if (isProcessing) return;
 
-  if (!selectedClient) {
-    alert('Por favor selecciona un cliente');
-    return;
-  }
+  setIsProcessing(true);
 
-  const { fecha, hora } = getPeruDateTime();
-  
-  // Generar número de pedido con formato: 2026-1302-101
-  const { data: lastSale } = await supabase
-    .from('sales')
-    .select('order_number')
-    .order('created_at', { ascending: false })
-    .limit(1);
-  
-  let consecutivo = 101;
-  if (lastSale && lastSale.length > 0) {
-    const lastNumber = lastSale[0].order_number;
-    const parts = lastNumber.split('-');
-    if (parts.length === 3) {
-      consecutivo = parseInt(parts[2]) + 1;
+  try {
+    const { fecha, hora } = getPeruDateTime();
+
+    // Generar número de pedido
+    const { data: lastSale } = await supabase
+      .from('sales').select('order_number')
+      .order('created_at', { ascending: false }).limit(1);
+
+    let consecutivo = 101;
+    if (lastSale && lastSale.length > 0) {
+      const parts = lastSale[0].order_number.split('-');
+      if (parts.length === 3) consecutivo = parseInt(parts[2]) + 1;
     }
-  }
-  
-  // Formato: YYYY-DDMM-XXX
-  const year = fecha.split('-')[0];
-  const month = fecha.split('-')[1];
-  const day = fecha.split('-')[2];
-  const orderNumber = `${year}-${day}${month}-${consecutivo.toString().padStart(3, '0')}`;
-  
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
-  // Crear la venta
-  const { data: saleData, error: saleError } = await supabase
-    .from('sales')
-    .insert([{
-      order_number: orderNumber,
-      fecha: fecha,
-      hora: hora,
-      client_name: selectedClient.nombre,
-      client_dni: selectedClient.dni,
-      client_phone: selectedClient.telefono,
-      client_address: selectedClient.direccion,
-      client_department: selectedClient.departamento,
-      sales_channel: salesChannel,
-      items: cart,
-      total: total
-    }])
-    .select();
+    const year = fecha.split('-')[0];
+    const month = fecha.split('-')[1];
+    const day = fecha.split('-')[2];
+    const orderNumber = `${year}-${day}${month}-${consecutivo.toString().padStart(3, '0')}`;
+    const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
-  if (saleError) {
-    console.error('Error creando venta:', saleError);
-    alert('Error al completar la venta');
-    return;
-  }
+    // 1. Crear la venta
+    const { data: saleData, error: saleError } = await supabase
+      .from('sales')
+      .insert([{
+        order_number: orderNumber,
+        fecha: saleDate,
+        hora: hora,
+        client_name: selectedClient.nombre,
+        client_dni: selectedClient.dni,
+        client_phone: selectedClient.telefono,
+        client_address: selectedClient.direccion,
+        client_department: selectedClient.departamento,
+        sales_channel: salesChannel,
+        items: cart,
+        total: total
+      }]).select();
 
-  const saleId = saleData[0].id;
+    if (saleError) throw new Error('Error al crear la venta: ' + saleError.message);
 
-  // Registrar transacciones de stock (SALIDA)
-  const stockTransactionsToInsert = [];
-  const productUpdates = [];
+    const saleId = saleData[0].id;
 
-  for (const item of cart) {
-    stockTransactionsToInsert.push({
-      fecha: fecha,
-      hora: hora,
-      tipo: 'SALIDA',
-      modelo: item.modelo,
-      color: item.color,
-      talla: item.talla,
-      cantidad: item.quantity,
-      sale_id: saleId,
-      notes: `Venta #${orderNumber}`
+    // 2. Registrar transacciones de stock
+    const stockTransactionsToInsert = [];
+    const productUpdates = [];
+
+    for (const item of cart) {
+      stockTransactionsToInsert.push({
+        fecha: saleDate,
+        hora: hora,
+        tipo: 'SALIDA',
+        modelo: item.modelo,
+        color: item.color,
+        talla: item.talla,
+        cantidad: item.quantity,
+        sale_id: saleId,
+        notes: `Venta #${orderNumber}`
+      });
+
+      const product = products.find(p => p.id === item.productoId);
+      if (product) {
+        const updatedStock = { ...product.stock };
+        updatedStock[item.color][item.talla] -= item.quantity;
+        productUpdates.push({ id: product.id, stock: updatedStock });
+      }
+    }
+
+    const { error: transError } = await supabase
+      .from('stock_transactions')
+      .insert(stockTransactionsToInsert);
+
+    if (transError) throw new Error('Error al registrar movimientos: ' + transError.message);
+
+    for (const update of productUpdates) {
+      const { error: stockError } = await supabase
+        .from('products')
+        .update({ stock: update.stock, updated_at: new Date().toISOString() })
+        .eq('id', update.id);
+
+      if (stockError) throw new Error('Error al actualizar stock: ' + stockError.message);
+    }
+
+    // 3. Actualizar estado local
+    setProducts(products.map(p => {
+      const update = productUpdates.find(u => u.id === p.id);
+      return update ? { ...p, stock: update.stock } : p;
+    }));
+
+    // 4. Mostrar confirmación
+    setSaleConfirmData({
+      orderNumber,
+      fecha: saleDate,
+      cliente: selectedClient.nombre,
+      canal: salesChannel,
+      items: [...cart],
+      total
     });
 
-    const product = products.find(p => p.id === item.productoId);
-    if (product) {
-      const updatedStock = { ...product.stock };
-      updatedStock[item.color][item.talla] -= item.quantity;
-      productUpdates.push({
-        id: product.id,
-        stock: updatedStock
-      });
-    }
+    // 5. Limpiar
+    setCart([]);
+    setSelectedClient(null);
+    setShowAddSale(false);
+    setClientSearch('');
+    setSaleDate(getPeruDateTime().fecha);
+    setSalesChannel('TIENDA');
+    setShowSaleConfirm(true);
+
+  } catch (error) {
+    console.error(error);
+    alert('❌ Error al completar la venta: ' + error.message + '\n\nIntenta de nuevo.');
+  } finally {
+    setIsProcessing(false);
   }
-
-  await supabase.from('stock_transactions').insert(stockTransactionsToInsert);
-
-  for (const update of productUpdates) {
-    await supabase
-      .from('products')
-      .update({ stock: update.stock, updated_at: new Date().toISOString() })
-      .eq('id', update.id);
-  }
-
-  setCart([]);
-  setSelectedClient(null);
-  setShowAddSale(false);
-  setClientSearch('');
-  setSaleDate(getPeruDateTime().fecha);
-  setSalesChannel('TIENDA');
-
-  alert('¡Venta completada exitosamente!');
 };
 
   // ============================================
@@ -1181,42 +1169,51 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
 
   console.log('Transacciones a insertar:', stockTransactionsToInsert);
 
-  await supabase.from('stock_transactions').insert(stockTransactionsToInsert);
+  try {
+  // 1. Insertar movimientos
+  const { error: errorInsert } = await supabase
+    .from('stock_transactions')
+    .insert(stockTransactionsToInsert);
 
-  await supabase
+  if (errorInsert) throw new Error('Error al guardar movimientos: ' + errorInsert.message);
+
+  // 2. Actualizar stock del producto
+  const { error: errorUpdate } = await supabase
     .from('products')
     .update({ stock: updatedStock, updated_at: new Date().toISOString() })
     .eq('id', product.id);
 
+  if (errorUpdate) throw new Error('Error al actualizar stock: ' + errorUpdate.message);
+
+  // 3. Actualizar estado local
   setProducts(products.map(p =>
     p.id === product.id ? { ...p, stock: updatedStock } : p
   ));
 
-  // Preparar datos para el modal de confirmación
-const detailItems = [];
-let total = 0;
-Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
-  Object.entries(tallas).forEach(([talla, cantidad]) => {
-    const cantidadInt = parseInt(cantidad) || 0;
-    if (cantidadInt !== 0) {
-      detailItems.push({ color, talla, cantidad: cantidadInt });
-      total += cantidadInt;
-    }
+  // 4. Preparar modal de confirmación
+  const detailItems = [];
+  let total = 0;
+  Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
+    Object.entries(tallas).forEach(([talla, cantidad]) => {
+      const cantidadInt = parseInt(cantidad) || 0;
+      if (cantidadInt !== 0) {
+        detailItems.push({ color, talla, cantidad: cantidadInt });
+        total += cantidadInt;
+      }
+    });
   });
-});
 
-setStockDetailData({
-  fecha: fecha,
-  modelo: product.modelo,
-  items: detailItems,
-  total: total,
-  esCorreccion: esCorreccion
-});
+  setStockDetailData({ fecha, modelo: product.modelo, items: detailItems, total, esCorreccion });
+  setShowAddStock(false);
+  setStockToAdd({ modelo: '', colors: {}, esCorreccion: false });
+  setShowStockDetail(true);
 
-setShowAddStock(false);
-setStockToAdd({ modelo: '', colors: {}, esCorreccion: false });
-setIsProcessing(false);
-setShowStockDetail(true); // Mostrar modal de confirmación
+} catch (error) {
+  console.error(error);
+  alert('❌ Error al guardar: ' + error.message + '\n\nIntenta de nuevo.');
+} finally {
+  setIsProcessing(false);
+}
 };
 
   // ============================================
@@ -4738,11 +4735,16 @@ const getStockClientesReport = () => {
               </div>
 
               <button
-                onClick={completeSale}
-                className="w-full px-4 py-4 md:py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 text-base md:text-sm"
-              >
-                Completar Venta
-              </button>
+  onClick={completeSale}
+  disabled={isProcessing}
+  className={`w-full px-4 py-4 md:py-3 rounded-lg font-medium text-base md:text-sm text-white ${
+    isProcessing
+      ? 'bg-gray-400 cursor-not-allowed'
+      : 'bg-emerald-600 hover:bg-emerald-700'
+  }`}
+>
+  {isProcessing ? '⏳ Procesando...' : 'Completar Venta'}
+</button>
             </>
           ) : (
             <div className="text-center py-8 bg-gray-50 rounded-lg border">
@@ -4751,6 +4753,69 @@ const getStockClientesReport = () => {
           )}
         </div>
       </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: Confirmación de Venta */}
+{showSaleConfirm && saleConfirmData && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+      
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+          <span className="text-2xl">✅</span>
+        </div>
+        <div>
+          <h2 className="text-lg font-bold">Venta Completada</h2>
+          <p className="text-xs text-gray-500">#{saleConfirmData.orderNumber}</p>
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="mb-4 pb-3 border-b space-y-1">
+        <p className="text-sm"><span className="font-medium">Cliente:</span> {saleConfirmData.cliente}</p>
+        <p className="text-sm"><span className="font-medium">Fecha:</span> {saleConfirmData.fecha.split('-').reverse().join('/')}</p>
+        <p className="text-sm"><span className="font-medium">Canal:</span> {saleConfirmData.canal}</p>
+      </div>
+
+      {/* Items */}
+      <div className="mb-4 space-y-1 max-h-48 overflow-y-auto">
+        {(() => {
+          const grouped = {};
+          saleConfirmData.items.forEach(item => {
+            if (!grouped[item.modelo]) grouped[item.modelo] = [];
+            grouped[item.modelo].push(item);
+          });
+          return Object.entries(grouped).map(([modelo, items]) => (
+            <div key={modelo} className="border rounded-lg overflow-hidden text-sm">
+              <div className="bg-gray-100 px-3 py-1">
+                <p className="font-bold text-xs">{modelo}</p>
+              </div>
+              {items.map((item, i) => (
+                <div key={i} className="flex justify-between px-3 py-1 border-t text-xs">
+                  <span>{item.color} - {item.talla} x{item.quantity}</span>
+                  <span className="font-medium">S/ {(item.precioVenta * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
+      </div>
+
+      {/* Total */}
+      <div className="pt-3 border-t flex justify-between items-center mb-4">
+        <span className="font-bold">TOTAL:</span>
+        <span className="font-bold text-xl">S/ {saleConfirmData.total.toFixed(2)}</span>
+      </div>
+
+      <button
+        onClick={() => setShowSaleConfirm(false)}
+        className="w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+      >
+        Cerrar
+      </button>
     </div>
   </div>
 )}
