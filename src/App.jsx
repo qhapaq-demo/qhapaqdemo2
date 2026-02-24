@@ -4428,18 +4428,18 @@ const getStockClientesReport = () => {
                           )
                           .map(color => (
                           <tr key={color} className="hover:bg-gray-50">
-                            <td className="border p-3 md:p-2 font-medium sticky left-0 bg-white text-base md:text-xs">{color}</td>
+                            <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-base md:text-xs w-20 md:w-auto">{color}</td>
                             {['S', 'M', 'L', 'XL'].map(talla => {
                               const stockDisponible = product.stock?.[color]?.[talla] || 0;
                               const key = `${color}-${talla}`;
                               return (
-                                <td key={talla} className="border p-3 md:p-2">
-                                  <div className="flex flex-col items-center gap-1">
+                                <td key={talla} className="border p-2 md:p-2">
+                                  <div className="flex flex-col items-center gap-2 md:gap-1">
                                     {/* Stock semaforizado */}
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                      stockDisponible >= 10 ? 'bg-green-100 text-sm green-700' :
-                                      stockDisponible >= 6  ? 'bg-yellow-100 text-sm yellow-700' :
-                                      stockDisponible > 0   ? 'bg-red-100 text-sm red-700' :
+                                    <span className={`text-base md:text-xs font-bold px-3 py-1.5 md:py-0.5 rounded-full ${
+                                      stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
+                                      stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
+                                      stockDisponible > 0   ? 'bg-red-100 text-red-700' :
                                       'bg-gray-100 text-gray-400'
                                     }`}>
                                       {stockDisponible}
@@ -4461,7 +4461,7 @@ const getStockClientesReport = () => {
                                         }
                                       }}
                                       disabled={stockDisponible === 0}
-                                      className={`w-full px-1 py-2 md:py-1 border rounded text-center text-sm md:text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                                      className={`w-full px-1 py-3 md:py-1 border rounded text-center text-base md:text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
                                         colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
                                           ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
                                           : ''
