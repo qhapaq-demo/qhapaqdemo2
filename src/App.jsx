@@ -4269,7 +4269,7 @@ const getStockClientesReport = () => {
 {showAddSale && (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
     <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
-      <div className="flex items-center justify-between mb-4 sticky top-0 bg-white z-10 py-3 border-b">
+      <div className="flex items-center justify-between mb-2 sticky top-0 bg-white z-10 py-1 md:py-3 border-b">
         <h2 className="text-2xl md:text-xl font-bold">Nueva Venta</h2>
         <button onClick={() => {
           setShowAddSale(false);
@@ -4283,21 +4283,21 @@ const getStockClientesReport = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT: Product Selection */}
         <div>
-          <h3 className="font-bold mb-3 text-lg md:text-base">Productos</h3>
+          <h3 className="hidden md:block font-bold mb-3 text-lg md:text-base">Productos</h3>
           
           {/* Buscador de productos */}
-          <div className="mb-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Buscar modelo..."
-                value={productSearchTerm}
-                onChange={(e) => setProductSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-sm"
-              />
-            </div>
-          </div>
+          <div className="mb-3 hidden md:block">
+  <div className="relative">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+    <input
+      type="text"
+      placeholder="Buscar modelo..."
+      value={productSearchTerm}
+      onChange={(e) => setProductSearchTerm(e.target.value)}
+      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-sm"
+    />
+  </div>
+</div>
 
           {/* Si NO hay producto seleccionado: Mostrar lista */}
 {!selectedProductModel && (
@@ -4415,10 +4415,10 @@ const getStockClientesReport = () => {
                      <thead className="bg-gray-100">
                        <tr>
                          <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-xs md:text-sm">Color/Talla</th>
-                         <th className="border p-2 text-center font-bold text-sm md:text-base">S</th>
-                         <th className="border p-2 text-center font-bold text-sm md:text-base">M</th>
-                         <th className="border p-2 text-center font-bold text-sm md:text-base">L</th>
-                         <th className="border p-2 text-center font-bold text-sm md:text-base">XL</th>
+                         <th className="border p-2 text-center font-bold text-base md:text-base">S</th>
+                         <th className="border p-2 text-center font-bold text-base md:text-base">M</th>
+                         <th className="border p-2 text-center font-bold text-base md:text-base">L</th>
+                         <th className="border p-2 text-center font-bold text-base md:text-base">XL</th>
                        </tr>
                      </thead>
                       <tbody>
@@ -4428,18 +4428,18 @@ const getStockClientesReport = () => {
                           )
                           .map(color => (
                           <tr key={color} className="hover:bg-gray-50">
-                            <td className="border p-2 font-medium sticky left-0 bg-white text-sm md:text-xs">{color}</td>
+                            <td className="border p-3 md:p-2 font-medium sticky left-0 bg-white text-base md:text-xs">{color}</td>
                             {['S', 'M', 'L', 'XL'].map(talla => {
                               const stockDisponible = product.stock?.[color]?.[talla] || 0;
                               const key = `${color}-${talla}`;
                               return (
-                                <td key={talla} className="border p-2">
+                                <td key={talla} className="border p-3 md:p-2">
                                   <div className="flex flex-col items-center gap-1">
                                     {/* Stock semaforizado */}
                                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                      stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
-                                      stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
-                                      stockDisponible > 0   ? 'bg-red-100 text-red-700' :
+                                      stockDisponible >= 10 ? 'bg-green-100 text-sm green-700' :
+                                      stockDisponible >= 6  ? 'bg-yellow-100 text-sm yellow-700' :
+                                      stockDisponible > 0   ? 'bg-red-100 text-sm red-700' :
                                       'bg-gray-100 text-gray-400'
                                     }`}>
                                       {stockDisponible}
@@ -4461,7 +4461,7 @@ const getStockClientesReport = () => {
                                         }
                                       }}
                                       disabled={stockDisponible === 0}
-                                      className={`w-full px-1 py-1 border rounded text-center text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                                      className={`w-full px-1 py-2 md:py-1 border rounded text-center text-sm md:text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
                                         colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
                                           ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
                                           : ''
