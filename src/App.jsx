@@ -3,7 +3,14 @@ import {
   Package, Users, ShoppingCart, TrendingUp, DollarSign, 
   AlertCircle, Plus, Edit2, Trash2, Search, X, Download,
   FileText, Share2, Eye, Menu, Home, ChevronRight, ChevronLeft,
-  Calendar, Filter, Upload, BarChart3, FileDown
+  Calendar, Filter, Upload, BarChart3, FileDown,
+  Settings,
+  Archive,
+  Layers,
+  BarChart2,
+  ClipboardList,
+  Warehouse,
+  ClipboardListIcon
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -392,7 +399,10 @@ const generarPDFStockGeneral = () => {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
+    const totalProducto = Object.values(productData.stockByColor).reduce((sum, tallas) => 
+      sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0);
     doc.text(productData.modelo, pageWidth / 2, yPos + 5.5, { align: 'center' });
+    doc.text(`Total: ${totalProducto}`, 175, yPos + 5.5, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     yPos += 12;
 
@@ -401,8 +411,16 @@ const generarPDFStockGeneral = () => {
   tallas.S || 0,
   tallas.M || 0,
   tallas.L || 0,
-  tallas.XL || 0  // ← AGREGAR
+  tallas.XL || 0
 ]);
+
+const totalRow = [
+  'TOTAL',
+  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.S || 0), 0),
+  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.M || 0), 0),
+  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.L || 0), 0),
+  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.XL || 0), 0),
+];
 
    doc.autoTable({
   startY: yPos,
@@ -410,7 +428,7 @@ const generarPDFStockGeneral = () => {
   body: tableData,
   theme: 'grid',
   headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // ← halign center aquí
-  styles: { fontSize: 9, cellPadding: 3 },
+  styles: { fontSize: 11, cellPadding: 4, textColor: [0, 0, 0] },
   columnStyles: {
     0: { cellWidth: 55 },
     1: { halign: 'center', cellWidth: 28 },
@@ -1447,7 +1465,8 @@ const downloadOrderNote = (sale) => {
   doc.autoTable({
     startY: currentY + 5,
     head: [['Modelo', 'Cant.', 'P. Unit.', 'Subtotal']],
-    body: tableData,
+    body: [...tableData, totalRow],
+    footStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
     theme: 'grid',
     headStyles: { 
       fillColor: [0, 0, 0],
@@ -2223,19 +2242,19 @@ const getStockClientesReport = () => {
       {/* NAVIGATION */}
       <nav className={`
         ${mobileMenuOpen ? 'block' : 'hidden'} 
-        md:block bg-white border-b sticky top-16 z-30 shadow-sm
+        md:block bg-white border-b sticky top-18 z-30 shadow-sm
       `}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2">
             {[
               { id: 'dashboard', icon: Home, label: 'Dashboard' },
               { id: 'productos', icon: Package, label: 'Productos' },
-              { id: 'inventario', icon: Package, label: 'Inventario' },
+              { id: 'inventario', icon: ClipboardListIcon, label: 'Inventario' },
               { id: 'clientes', icon: Users, label: 'Clientes' },
               { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
               { id: 'reportes', icon: TrendingUp, label: 'Reportes' },
               { id: 'backup', icon: Download, label: 'Backup' },
-              { id: 'configuracion', icon: TrendingUp, label: 'Configuración' }
+              { id: 'configuracion', icon: Settings, label: 'Configuración' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -2688,70 +2707,49 @@ const getStockClientesReport = () => {
       </div>
     )}
    
-        {/* ============================================ */}
-        {/* TAB: INVENTARIO */}
-        {/* ============================================ */}
-        {activeTab === 'inventario' && (
-          <div className="space-y-6">
-            {/* Actions Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-3">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Buscar productos..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddProduct(true)}
-                  className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
-                >
-                  <Plus size={20} />
-                  Agregar Producto
-                </button>
-                <button
-                  onClick={() => setShowAddStock(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
-                >
-                  <Plus size={20} />
-                  Agregar Stock
-                </button>
-              </div>
-            </div>
+      {/* TAB: INVENTARIO */}
+{activeTab === 'inventario' && (
+  <div className="space-y-6">
 
-      {/* REPORTES DE INVENTARIO */}
-<div className="mt-8 space-y-4">
-  {/* Filtros */}
-  <div className="bg-white rounded-xl shadow-sm border p-4">
-    <div className="flex flex-wrap items-center gap-3">
-      <h3 className="font-bold text-m">Filtrar reportes:</h3>
-      <button onClick={() => setReportFilter('hoy')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
-        Hoy
+    {/* Header */}
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <h2 className="text-2xl font-bold text-gray-900">Inventario</h2>
+      <button
+        onClick={() => setShowAddStock(true)}
+        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+      >
+        <Plus size={20} />
+        Agregar Stock
       </button>
-      <button onClick={() => setReportFilter('personalizado')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
-        Personalizado
-      </button>
-      {reportFilter === 'personalizado' && (
-        <div className="flex gap-2 items-center">
-          <input type="date" value={customDateRange.start}
-            onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
-            className="px-2 py-1.5 border rounded-lg text-sm" />
-          <span className="text-sm">a</span>
-          <input type="date" value={customDateRange.end}
-            onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
-            className="px-2 py-1.5 border rounded-lg text-sm" />
-        </div>
-      )}
     </div>
-  </div>
+
+    {/* REPORTES DE INVENTARIO */}
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-sm border p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="font-bold text-m">Filtrar reportes:</h3>
+          <button onClick={() => setReportFilter('hoy')}
+            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+            Hoy
+          </button>
+          <button onClick={() => setReportFilter('personalizado')}
+            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+            Personalizado
+          </button>
+          {reportFilter === 'personalizado' && (
+            <div className="flex gap-2 items-center">
+              <input type="date" value={customDateRange.start}
+                onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
+                className="px-2 py-1.5 border rounded-lg text-sm" />
+              <span className="text-sm">a</span>
+              <input type="date" value={customDateRange.end}
+                onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
+                className="px-2 py-1.5 border rounded-lg text-sm" />
+            </div>
+          )}
+        </div>
+      </div>  
 
   {/* Reporte 1: STOCK ACUMULADO - orden: más stock a la izquierda */}
   <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -3273,7 +3271,7 @@ const getStockClientesReport = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                       <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">DNI</th>
                       <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
                       <th className="px-3 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
@@ -3618,8 +3616,12 @@ const getStockClientesReport = () => {
       <div className="p-4 space-y-3">
         {getStockGeneralReport().map((productData, idx) => (
           <div key={idx} className="border rounded-lg p-4">
-            <h4 className="font-bold mb-3 text-center bg-black text-white p-2 rounded">
-              {productData.modelo}
+            <h4 className="font-bold mb-3 bg-black text-white p-2 rounded flex justify-between items-center">
+              <span>{productData.modelo}</span>
+              <span className="text-emerald-400">
+                {Object.values(productData.stockByColor).reduce((sum, tallas) => 
+                  sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0)}
+              </span>
             </h4>
             <table className="w-full text-sm border-collapse">
               <thead>
