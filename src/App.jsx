@@ -2262,175 +2262,281 @@ const getStockClientesReport = () => {
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-4 py-6 text-xl md:text-base">
         
-        {/* ============================================ */}
-        {/* TAB: DASHBOARD */}
-        {/* ============================================ */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-4 md:grid-cols-4 gap-2 md:gap-4">
-              {/* CARD 1: PRODUCTOS */}
-              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 bg-blue-50 rounded-m">
-                    <Package className="text-blue-500" size={24} />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Productos</p>
-                <p className="text-1xl font-bold">{products.length}</p>
-              </div>
+       {/* TAB: DASHBOARD */}
+{activeTab === 'dashboard' && (
+  <div className="space-y-6">
 
-              {/* CARD 2: CLIENTES */}
-              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 bg-purple-50 rounded-m">
-                    <Users className="text-purple-500" size={24} />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Clientes</p>
-                <p className="text-1xl font-bold">{clients.length}</p>
-              </div>
+    {/* 4 MÉTRICAS */}
+<div className="grid grid-cols-4 gap-4">
+  {(() => {
+    const hoy = getPeruDateTime().fecha;
+    const ayer = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    })();
+    const mesActual = hoy.slice(0, 7);
+    const mesAnterior = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    })();
 
-              {/* CARD 3: VENTAS DEL DÍA */}
-              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 bg-emerald-50 rounded-m">
-                    <ShoppingCart className="text-emerald-500" size={24} />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">Ventas del Día</p>
-                <p className="text-1xl font-bold">
-                  {sales.filter(s => s.fecha === getPeruDateTime().fecha).length}
-                </p>
-              </div>
+    const ventasHoy = sales.filter(s => s.fecha === hoy).length;
+    const ventasAyer = sales.filter(s => s.fecha === ayer).length;
+    const pctVentas = ventasAyer === 0 ? 100 : Math.round(((ventasHoy - ventasAyer) / ventasAyer) * 100);
 
-              {/* CARD 4: INGRESOS DEL DÍA */}
-              <div className="bg-white p-2 md:p-4 rounded-m shadow-sm border hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 bg-orange-50 rounded-m">
-                    <DollarSign className="text-orange-500" size={24} />
+    const ingresosHoy = sales.filter(s => s.fecha === hoy).reduce((sum, s) => sum + s.total, 0);
+    const ingresosAyer = sales.filter(s => s.fecha === ayer).reduce((sum, s) => sum + s.total, 0);
+    const pctIngresos = ingresosAyer === 0 ? 100 : Math.round(((ingresosHoy - ingresosAyer) / ingresosAyer) * 100);
+
+    const pedidosMes = sales.filter(s => s.fecha?.slice(0,7) === mesActual).length;
+    const pedidosMesAnt = sales.filter(s => s.fecha?.slice(0,7) === mesAnterior).length;
+    const pctPedidos = pedidosMesAnt === 0 ? 100 : Math.round(((pedidosMes - pedidosMesAnt) / pedidosMesAnt) * 100);
+
+    const ventasMes = sales.filter(s => s.fecha?.slice(0,7) === mesActual).reduce((sum, s) => sum + s.total, 0);
+    const ventasMesAnt = sales.filter(s => s.fecha?.slice(0,7) === mesAnterior).reduce((sum, s) => sum + s.total, 0);
+    const pctVentasMes = ventasMesAnt === 0 ? 100 : parseFloat(((ventasMes - ventasMesAnt) / ventasMesAnt) * 100).toFixed(2);
+
+    return (
+      <>
+        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
+          <p className="text-sm md:text-m text-gray-600 mb-1">Ventas hoy</p>
+          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">{ventasHoy}</p>
+          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctVentas >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            {pctVentas >= 0 ? '↑' : '↓'} {pctVentas >= 0 ? '+' : ''}{pctVentas}% vs ayer
+          </p>
+        </div>
+
+        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
+          <p className="text-sm md:text-m text-gray-600 mb-1">Ingresos hoy</p>
+          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">S/{ingresosHoy.toFixed(0)}</p>
+          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctIngresos >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            {pctIngresos >= 0 ? '↑' : '↓'} {pctIngresos >= 0 ? '+' : ''}{pctIngresos}% vs ayer
+          </p>
+        </div>
+
+        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
+          <p className="text-sm md:text-m text-gray-600 mb-1">Pedidos mes</p>
+          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">{pedidosMes}</p>
+          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctPedidos >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            {pctPedidos >= 0 ? '↑' : '↓'} {pctPedidos >= 0 ? '+' : ''}{pctPedidos}% vs anterior
+          </p>
+        </div>
+
+        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
+          <p className="text-sm md:text-m text-gray-600 mb-1">Ventas mes</p>
+          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">S/{ventasMes.toFixed(0)}</p>
+          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctVentasMes >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            {pctVentasMes >= 0 ? '↑' : '↓'} {pctVentasMes >= 0 ? '+' : ''}{pctVentasMes}% vs anterior
+          </p>
+        </div>
+      </>
+    );
+  })()}
+</div>
+
+    {/* VENTAS 7 DÍAS + EVOLUCIÓN MENSUAL */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      {/* Ventas últimos 7 días */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="font-bold text-lg mb-4">📈 Ventas últimos 7 días</h3>
+        {(() => {
+          const dias = [];
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const fechaStr = `${yyyy}-${mm}-${dd}`;
+            const total = sales.filter(s => s.fecha === fechaStr).reduce((sum, s) => sum + s.total, 0);
+            const label = i === 0 ? 'Hoy' : ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()];
+            dias.push({ label, total, esHoy: i === 0 });
+          }
+          const maxTotal = Math.max(...dias.map(d => d.total), 1);
+          return (
+            <div className="flex items-end gap-1 md:gap-2 h-28">
+              {dias.map((dia, idx) => (
+                <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                  <span className="text-xs md:text-[10px] text-gray-600 font-bold">
+                    {dia.total > 0 ? `S/${Math.round(dia.total)}` : ''}
+                  </span>
+                  <div className="w-full rounded-t-md transition-all"
+                    style={{ height: `${Math.max((dia.total / maxTotal) * 100, dia.total > 0 ? 5 : 2)}%`, background: dia.esHoy ? '#10b981' : '#2d2d2d' }}
+                  />
+                  <span className={`text-sm md:text-[10px] font-medium ${dia.esHoy ? 'text-emerald-700' : 'text-gray-500'}`}>
+                    {dia.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+     {/* Evolución ventas mensuales */}
+<div className="bg-white rounded-xl shadow-sm border p-6">
+  <h3 className="font-bold text-lg mb-4">📊 Evolución de ventas mensuales</h3>
+  {(() => {
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+    const anio = new Date().getFullYear();
+    const mesActual = new Date().getMonth();
+    const datos = meses.map((mes, idx) => {
+      const mesStr = `${anio}-${String(idx+1).padStart(2,'0')}`;
+      const total = sales.filter(s => s.fecha?.slice(0,7) === mesStr).reduce((sum, s) => sum + s.total, 0);
+      return { mes, total, esActual: idx === mesActual };
+    });
+    const maxTotal = Math.max(...datos.map(d => d.total), 1);
+    return (
+      <div className="relative h-28">
+        <svg viewBox="0 0 300 80" className="w-full h-full">
+          {datos.map((d, idx) => {
+            const x = (idx / 11) * 280 + 10;
+            const y = 70 - (d.total / maxTotal) * 60;
+            return (
+              <g key={idx}>
+                {idx < 11 && (
+                  <line
+                    x1={x} y1={y}
+                    x2={((idx+1) / 11) * 280 + 10}
+                    y2={70 - (datos[idx+1].total / maxTotal) * 60}
+                    stroke="#2d2d2d" strokeWidth="1.5"
+                  />
+                )}
+                <circle cx={x} cy={y} r="3"
+                  fill={d.esActual ? '#10b981' : '#fff'}
+                  stroke={d.esActual ? '#10b981' : '#2d2d2d'}
+                  strokeWidth="1.5"
+                />
+              </g>
+            );
+          })}
+        </svg>
+        <div className="flex justify-between px-1 mt-1">
+          {datos.map((d, idx) => (
+            <span key={idx} className={`text-[9px] font-medium ${d.esActual ? 'text-emerald-700' : 'text-gray-400'}`}>
+              {d.mes}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  })()}
+</div>
+</div>
+
+    {/* PRODUCTOS + CANAL + DEPARTAMENTO */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      {/* Top productos más vendidos */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="font-bold text-lg mb-4">🏆 Productos más vendidos · Este mes</h3>
+        {(() => {
+          const mesActual = getPeruDateTime().fecha.slice(0,7);
+          const conteo = {};
+          sales.filter(s => s.fecha?.slice(0,7) === mesActual).forEach(s => {
+            (s.items || []).forEach(item => {
+              conteo[item.modelo] = (conteo[item.modelo] || 0) + item.quantity;
+            });
+          });
+          const sorted = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 5);
+          const maxVal = sorted[0]?.[1] || 1;
+          return sorted.length > 0 ? (
+            <div className="space-y-3">
+              {sorted.map(([modelo, qty]) => (
+                <div key={modelo}>
+                  <div className="flex justify-between text-base text-gray-700 mb-1">
+                    <span className="truncate mr-2">{modelo}</span>
+                    <span className="font-bold text-base text-gray-900 flex-shrink-0">{qty} und</span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${(qty / maxVal) * 100}%`, background: '#2d2d2d' }} />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 mb-1">Ingresos del Día</p>
-                <p className="text-1xl font-bold">
-                  S/ {sales
-                    .filter(s => s.fecha === getPeruDateTime().fecha)
-                    .reduce((sum, s) => sum + s.total, 0)
-                    .toFixed(2)}
-                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">Sin ventas este mes</p>
+          );
+        })()}
+      </div>
+
+      {/* Canal LIVE vs TIENDA */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="font-bold text-lg mb-4">🛒 Ventas por canal · Este mes</h3>
+        {(() => {
+          const mesActual = getPeruDateTime().fecha.slice(0,7);
+          const live = sales.filter(s => s.fecha?.slice(0,7) === mesActual && s.sales_channel === 'LIVE').reduce((sum, s) => sum + s.total, 0);
+          const tienda = sales.filter(s => s.fecha?.slice(0,7) === mesActual && s.sales_channel === 'TIENDA').reduce((sum, s) => sum + s.total, 0);
+          const total = live + tienda || 1;
+          const livePct = Math.round((live / total) * 100);
+          const tiendaPct = 100 - livePct;
+          return (
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1 bg-gray-900 text-white rounded-lg p-3 text-center">
+                  <p className="text-sm opacity-70">LIVE</p>
+                  <p className="text-xl font-bold">{livePct}%</p>
+                  <p className="text-sm opacity-60">S/{Math.round(live)}</p>
+                </div>
+                <div className="flex-1 bg-emerald-500 text-white rounded-lg p-3 text-center">
+                  <p className="text-sm opacity-80">TIENDA</p>
+                  <p className="text-xl font-bold">{tiendaPct}%</p>
+                  <p className="text-sm opacity-70">S/{Math.round(tienda)}</p>
+                </div>
+              </div>
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
+                <div className="h-full transition-all" style={{ width: `${livePct}%`, background: '#2d2d2d' }} />
+                <div className="h-full transition-all" style={{ width: `${tiendaPct}%`, background: '#10b981' }} />
               </div>
             </div>
+          );
+        })()}
+      </div>
 
-            {/* 6 BOTONES PRINCIPALES - Estilo KeyFacil */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
-              {/* BOTÓN: PRODUCTOS */}
-              <button
-                onClick={() => setActiveTab('productos')}
-                className="group relative bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <FileText size={40} strokeWidth={2} />
-                </div>
-                <span className="font-bold text-xl">Productos</span>
-              </div>
-            </button>
-              {/* BOTÓN: INVENTARIO */}
-              <button
-                onClick={() => setActiveTab('inventario')}
-                className="group relative bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <Package size={40} strokeWidth={2} />
+      {/* Ventas por departamento */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="font-bold text-lg mb-4">📍 Ventas por departamento · Este mes</h3>
+        {(() => {
+          const mesActual = getPeruDateTime().fecha.slice(0,7);
+          const deptMap = {};
+          sales.filter(s => s.fecha?.slice(0,7) === mesActual).forEach(s => {
+            const dept = s.client_department || 'Sin depto.';
+            deptMap[dept] = (deptMap[dept] || 0) + s.total;
+          });
+          const sorted = Object.entries(deptMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+          const maxVal = sorted[0]?.[1] || 1;
+          return sorted.length > 0 ? (
+            <div className="space-y-2.5">
+              {sorted.map(([dept, total]) => (
+                <div key={dept} className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 w-20 flex-shrink-0 truncate">{dept}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${(total / maxVal) * 100}%`, background: '#2d2d2d' }} />
                   </div>
-                  <span className="font-bold text-xl">Inventario</span>
+                  <span className="text-sm font-bold text-gray-800 w-16 text-right flex-shrink-0">S/{Math.round(total)}</span>
                 </div>
-              </button>
-
-              {/* BOTÓN: CLIENTES */}
-              <button
-                onClick={() => setActiveTab('clientes')}
-                className="group relative bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <Users size={40} strokeWidth={2} />
-                  </div>
-                  <span className="font-bold text-xl">Clientes</span>
-                </div>
-              </button>
-
-              {/* BOTÓN: VENTAS */}
-              <button
-                onClick={() => setActiveTab('ventas')}
-                className="group relative bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <ShoppingCart size={40} strokeWidth={2} />
-                  </div>
-                  <span className="font-bold text-xl">Ventas</span>
-                </div>
-              </button>
-
-              {/* BOTÓN: REPORTES */}
-              <button
-                onClick={() => setActiveTab('reportes')}
-                className="group relative bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <BarChart3 size={40} strokeWidth={2} />
-                  </div>
-                  <span className="font-bold text-xl">Reportes</span>
-                </div>
-              </button>
-
-              {/* BOTÓN: BACKUP */}
-              <button
-                onClick={() => setActiveTab('backup')}
-                className="group relative bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <Download size={40} strokeWidth={2} />
-                  </div>
-                  <span className="font-bold text-xl">Backup</span>
-                </div>
-              </button>
-
-              {/* BOTÓN: CONFIGURACIÓN */}
-              <button
-                onClick={() => setActiveTab('configuracion')}
-                className="group relative bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <div className="p-4 bg-white/20 rounded-full group-hover:bg-white/30 transition-all">
-                    <div className="w-10 h-10 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M12 1v6m0 6v6"></path>
-                        <path d="m4.2 4.2 4.3 4.3m5 5 4.3 4.3"></path>
-                        <path d="M1 12h6m6 0h6"></path>
-                        <path d="m4.2 19.8 4.3-4.3m5-5 4.3-4.3"></path>
-                      </svg>
-                    </div>
-                  </div>
-                  <span className="font-bold text-xl">Configuración</span>
-                </div>
-              </button>
+              ))}
             </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">Sin datos este mes</p>
+          );
+        })()}
+      </div>
+    </div>
 
-            {/* FOOTER */}
-            <div className="mt-12 pt-8 border-t text-center text-sm text-gray-600">
-              <p className="font-medium">© 2026 Qhapaq</p>
-              <p className="mt-1">Sistema de gestión de inventario y ventas</p>
-              <p className="mt-1">Parte de <span className="font-semibold">InteliGest</span></p>
-              <p className="text-xs mt-1 text-gray-500">Desarrollado en Perú 🇵🇪</p>
-            </div>
-          </div>
-        )}
+    {/* FOOTER */}
+    <div className="mt-4 bg-black text-white text-center text-sm py-6 rounded-xl">
+      <p className="font-medium text-white">© 2026 Qhapaq</p>
+      <p className="mt-0.5 text-gray-400">Sistema de gestión de inventario y ventas</p>
+      <p className="mt-0.5 text-gray-400">Parte de <span className="font-semibold text-white">InteliGest</span></p>
+      <p className="text-xs mt-0.5 text-gray-500">Desarrollado en Perú {'\u{1F1F5}\u{1F1EA}'}</p>
+    </div>
+
+  </div>
+)}
 
         {/* TAB: PRODUCTOS */}
 {activeTab === 'productos' && (
@@ -2484,7 +2590,7 @@ const getStockClientesReport = () => {
     });
 
     return (
-      <div key={product.id} className="bg-white rounded-lg shadow-sm border p-2 hover:shadow-md transition-shadow">
+      <div key={product.id} className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow">
         {/* NUEVO: Flex container para imagen izquierda + contenido derecha */}
         <div className="flex gap-2 mb-2">
           {/* Imagen a la izquierda */}
@@ -2492,7 +2598,7 @@ const getStockClientesReport = () => {
             <img 
               src={product.imagen} 
               alt={product.modelo} 
-              className="w-16 h-16 object-contain rounded flex-shrink-0 bg-gray-50"
+              className="w-20 h-20 object-contain rounded flex-shrink-0 bg-gray-50"
             />
           )}
           
@@ -2500,8 +2606,8 @@ const getStockClientesReport = () => {
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm mb-0">{product.modelo}</h3>
-                <p className="text-emerald-600 font-bold text-base">S/ {product.precio_venta}</p>
+                <h3 className="font-bold text-lg mb-1">{product.modelo}</h3>
+                <p className="text-emerald-600 font-bold text-lg">S/ {product.precio_venta}</p>
                 {product.precio_compra > 0 && (
                   <p className="text-xs text-gray-500">Compra: S/ {product.precio_compra}</p>
                 )}
@@ -2514,21 +2620,21 @@ const getStockClientesReport = () => {
                   className="p-2 hover:bg-gray-100 rounded-lg"
                   title="Editar"
                 >
-                  <Edit2 size={16} />
+                  <Edit2 size={18} />
                 </button>
                 <button
                   onClick={() => deleteProduct(product.id)}
                   className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
                   title="Eliminar"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={18} />
                 </button>
                 <button
                   onClick={() => toggleProductActive(product.id, product.activo)}
-                  className={`p-2 rounded-lg ${
+                  className={`p-3 rounded-lg ${
                     product.activo 
-                      ? 'hover:bg-green-50 text-green-600' 
-                      : 'hover:bg-gray-100 text-red-600'
+                      ? 'hover:bg-green-100 text-green-600 font-bold bg-green-50' 
+                      : 'hover:bg-gray-100 text-gray-800 font-bold bg-gray-100'
                   }`}
                   title={product.activo ? 'Producto Activo - Click para desactivar' : 'Producto Inactivo - Click para activar'}
                 >
@@ -2618,13 +2724,13 @@ const getStockClientesReport = () => {
   {/* Filtros */}
   <div className="bg-white rounded-xl shadow-sm border p-4">
     <div className="flex flex-wrap items-center gap-3">
-      <h3 className="font-bold text-sm">Filtrar reportes:</h3>
+      <h3 className="font-bold text-m">Filtrar reportes:</h3>
       <button onClick={() => setReportFilter('hoy')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+        className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
         Hoy
       </button>
       <button onClick={() => setReportFilter('personalizado')}
-        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+        className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
         Personalizado
       </button>
       {reportFilter === 'personalizado' && (
@@ -2661,7 +2767,7 @@ const getStockClientesReport = () => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[10px] md:text-sm text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -2714,7 +2820,7 @@ const getStockClientesReport = () => {
                 return totalB - totalA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[10px] md:text-sm text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -2806,7 +2912,7 @@ const getStockClientesReport = () => {
                 return totalB - totalA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[8px] md:text-xs text-center">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[10px] md:text-sm text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
