@@ -2360,13 +2360,13 @@ const getStockClientesReport = () => {
             <div className="flex items-end gap-1 md:gap-2 h-28">
               {dias.map((dia, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                  <span className="text-xs md:text-[10px] text-gray-600 font-bold">
+                  <span className="text-xs md:text-xs text-gray-600 font-bold">
                     {dia.total > 0 ? `S/${Math.round(dia.total)}` : ''}
                   </span>
                   <div className="w-full rounded-t-md transition-all"
                     style={{ height: `${Math.max((dia.total / maxTotal) * 100, dia.total > 0 ? 5 : 2)}%`, background: dia.esHoy ? '#10b981' : '#2d2d2d' }}
                   />
-                  <span className={`text-sm md:text-[10px] font-medium ${dia.esHoy ? 'text-emerald-700' : 'text-gray-500'}`}>
+                  <span className={`text-sm md:text-xs font-medium ${dia.esHoy ? 'text-emerald-700' : 'text-gray-500'}`}>
                     {dia.label}
                   </span>
                 </div>
@@ -2377,8 +2377,8 @@ const getStockClientesReport = () => {
       </div>
 
      {/* Evolución ventas mensuales */}
-<div className="bg-white rounded-xl shadow-sm border p-6">
-  <h3 className="font-bold text-lg mb-4">📊 Evolución de ventas mensuales</h3>
+<div className="bg-white rounded-xl shadow-sm border p-2">
+  <h3 className="font-bold text-lg mb-2">📊 Evolución de ventas mensuales</h3>
   {(() => {
     const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
     const anio = new Date().getFullYear();
@@ -2390,37 +2390,43 @@ const getStockClientesReport = () => {
     });
     const maxTotal = Math.max(...datos.map(d => d.total), 1);
     return (
-      <div className="relative h-28">
-        <svg viewBox="0 0 300 80" className="w-full h-full">
+      <div className="relative">
+        <svg viewBox="0 0 300 100" className="w-full" style={{height:'130px'}}>
           {datos.map((d, idx) => {
-            const x = (idx / 11) * 280 + 10;
-            const y = 70 - (d.total / maxTotal) * 60;
+            const x = (idx / 11) * 264 + 18;
+            const y = 60 - (d.total / maxTotal) * 48;
             return (
               <g key={idx}>
                 {idx < 11 && (
                   <line
                     x1={x} y1={y}
-                    x2={((idx+1) / 11) * 280 + 10}
-                    y2={70 - (datos[idx+1].total / maxTotal) * 60}
+                    x2={((idx+1) / 11) * 264 + 18}
+                    y2={60 - (datos[idx+1].total / maxTotal) * 48}
                     stroke="#2d2d2d" strokeWidth="1.5"
                   />
                 )}
-                <circle cx={x} cy={y} r="3"
-                  fill={d.esActual ? '#10b981' : '#fff'}
-                  stroke={d.esActual ? '#10b981' : '#2d2d2d'}
+                <circle cx={x} cy={y} r="2"
+                  fill={d.esActual ? '#f97316' : '#fff'}
+                  stroke={d.esActual ? '#f97316' : '#2d2d2d'}
                   strokeWidth="1.5"
                 />
+                {d.total > 0 && (
+                  <text x={x} y={y - 7} textAnchor="middle"
+                    fontSize="8"
+                    fill={d.esActual ? '#10b981' : '#555'}
+                    fontWeight="bold">
+                    S/{Math.round(d.total).toLocaleString()}
+                  </text>
+                )}
+                <text x={x} y={88} textAnchor="middle" fontSize="9"
+                  fill={d.esActual ? '#059669' : '#999'}
+                  fontWeight={d.esActual ? 'bold' : 'normal'}>
+                  {d.mes}
+                </text>
               </g>
             );
           })}
         </svg>
-        <div className="flex justify-between px-1 mt-1">
-          {datos.map((d, idx) => (
-            <span key={idx} className={`text-[9px] font-medium ${d.esActual ? 'text-emerald-700' : 'text-gray-400'}`}>
-              {d.mes}
-            </span>
-          ))}
-        </div>
       </div>
     );
   })()}
