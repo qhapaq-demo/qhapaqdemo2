@@ -380,7 +380,7 @@ const generarPDFStockGeneral = () => {
   let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE STOCK - GENERAL');
 
   // Fecha
-  doc.setFontSize(9);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
   doc.text(`FECHA: ${fecha}`, 14, yPos);
@@ -394,17 +394,19 @@ const generarPDFStockGeneral = () => {
       yPos = 20;
     }
 
-    doc.setFillColor(0, 0, 0);
-    doc.rect(14, yPos, 167, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
     const totalProducto = Object.values(productData.stockByColor).reduce((sum, tallas) => 
       sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0);
-    doc.text(productData.modelo, pageWidth / 2, yPos + 5.5, { align: 'center' });
-    doc.text(`Total: ${totalProducto}`, 175, yPos + 5.5, { align: 'right' });
+
+    doc.setFillColor(0, 0, 0);
+    doc.rect(14, yPos, 167, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(productData.modelo, pageWidth / 2, yPos + 7, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(`Total: ${totalProducto}`, 178, yPos + 7, { align: 'right' });
     doc.setTextColor(0, 0, 0);
-    yPos += 12;
+    yPos += 14;
 
     const tableData = Object.entries(productData.stockByColor).map(([color, tallas]) => [
   color,
@@ -428,7 +430,7 @@ const totalRow = [
   body: tableData,
   theme: 'grid',
   headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // ← halign center aquí
-  styles: { fontSize: 11, cellPadding: 4, textColor: [0, 0, 0] },
+  styles: { fontSize: 10, cellPadding: 3, textColor: [0, 0, 0] },
   columnStyles: {
     0: { cellWidth: 55 },
     1: { halign: 'center', cellWidth: 28 },
