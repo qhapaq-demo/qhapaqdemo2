@@ -37,6 +37,7 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showStockDetail, setShowStockDetail] = useState(false);
   const [stockDetailData, setStockDetailData] = useState(null);
+  const [colorSwatches, setColorSwatches] = useState([]);  
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -181,6 +182,17 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   doc.line(14, 58, pageWidth - 14, 58);
 
   return 66; // yPos inicial
+};
+
+// ============================================
+// FUNCIÓN HELPER: Color Swatches
+// ============================================
+const getColorImageUrl = (modelo, colorName) => {
+  const swatch = colorSwatches.find(
+    s => s.modelo === modelo && 
+    s.color_name.toLowerCase() === colorName.toLowerCase()
+  );
+  return swatch?.image_url || null;
 };
 
   // ============================================
@@ -786,6 +798,17 @@ useEffect(() => {
       setStockTransactions(data || []);
     }
   };
+
+  const fetchColorSwatches = async () => {
+  const { data, error } = await supabase
+    .from('color_swatches')
+    .select('*');
+  if (!error) setColorSwatches(data);
+};
+
+useEffect(() => {
+  fetchColorSwatches();
+}, []);
 
   // ============================================
   // FUNCIONES CRUD DE PRODUCTOS
@@ -3696,11 +3719,24 @@ const getStockClientesReport = () => {
                     <td key={talla} className="border p-2 align-top w-1/4">
                       {productData.colorsByTalla[talla]?.length > 0 ? (
                         <div className="space-y-2">
-                          {productData.colorsByTalla[talla].map((color, i) => (
-                            <div key={i} className="bg-gray-100 border rounded px-1.5 py-0.5 text-xs md:text-sm break-words">
-                              {color}
-                            </div>
-                          ))}
+                          {productData.colorsByTalla[talla].map((color, i) => {
+  const imageUrl = getColorImageUrl(productData.modelo, color);
+  return (
+    <div key={i} className="flex items-center gap-2 bg-white border rounded p-1">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={color}
+          className="w-10 h-10 object-cover rounded flex-shrink-0"
+          style={{ background: '#fff' }}
+        />
+      ) : (
+        <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
+      )}
+      <span className="text-xs break-words">{color}</span>
+    </div>
+  );
+})}
                         </div>
                       ) : (
                         <div className="text-center text-gray-400">-</div>
