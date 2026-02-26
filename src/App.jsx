@@ -183,18 +183,18 @@ const agregarEncabezadoPDF = (doc, titulo) => {
 
   return 66; // yPos inicial
 };
-
-// ============================================
-// FUNCIÓN HELPER: Color Swatches
-// ============================================
-const getColorImageUrl = (modelo, colorName) => {
+   
+  // ============================================
+  // FUNCIÓN HELPER: Color Swatches
+  // ============================================
+  const getColorImageUrl = (modelo, colorName) => {
   const swatch = colorSwatches.find(
     s => s.modelo === modelo && 
     s.color_name.toLowerCase() === colorName.toLowerCase()
   );
-  return swatch?.image_url || null;
+  if (!swatch?.image_url) return null;
+  return `${swatch.image_url}?width=80&height=80&quality=70`;
 };
-
   // ============================================
   // FUNCIÓN PARA DESCARGAR REPORTE EN PDF
   // ============================================
@@ -3720,23 +3720,24 @@ const getStockClientesReport = () => {
                       {productData.colorsByTalla[talla]?.length > 0 ? (
                         <div className="space-y-2">
                           {productData.colorsByTalla[talla].map((color, i) => {
-  const imageUrl = getColorImageUrl(productData.modelo, color);
-  return (
-    <div key={i} className="flex items-center gap-2 bg-white border rounded p-1">
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={color}
-          className="w-10 h-10 object-cover rounded flex-shrink-0"
-          style={{ background: '#fff' }}
-        />
-      ) : (
-        <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
-      )}
-      <span className="text-xs break-words">{color}</span>
-    </div>
-  );
-})}
+                            const imageUrl = getColorImageUrl(productData.modelo, color);
+                            return (
+                              <div key={i} className="flex items-center gap-2 bg-white border rounded p-1">
+                                {imageUrl ? (
+                                  <img
+                                    src={imageUrl}
+                                    alt={color}
+                                    loading="lazy"
+                                    className="w-10 h-10 object-cover rounded flex-shrink-0"
+                                    style={{ background: '#fff' }}
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
+                                )}
+                                <span className="text-xs break-words">{color}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-center text-gray-400">-</div>
