@@ -3358,7 +3358,7 @@ const getStockClientesReport = () => {
         <h2 className="text-2xl font-bold">Ventas</h2>
         <button
           onClick={() => setShowAddSale(true)}
-          className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium text-sm"
+          className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium text-lg"
         >
           <Plus size={18} />
           Nueva Venta
@@ -3369,7 +3369,7 @@ const getStockClientesReport = () => {
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setReportFilter('hoy')}
-          className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+          className={`px-3 py-1.5 rounded-lg font-medium text-base transition-colors ${
             reportFilter === 'hoy'
               ? 'bg-black text-white'
               : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
@@ -3379,7 +3379,7 @@ const getStockClientesReport = () => {
         </button>
         <button
           onClick={() => setReportFilter('personalizado')}
-          className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+          className={`px-3 py-1.5 rounded-lg font-medium text-base transition-colors ${
             reportFilter === 'personalizado'
               ? 'bg-black text-white'
               : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
@@ -3450,7 +3450,7 @@ const getStockClientesReport = () => {
                     className="p-1.5 hover:bg-gray-100 rounded-lg"
                     title="Ver detalle"
                   >
-                    <Eye size={16} />
+                    <Eye size={20} />
                   </button>
                 </div>
               </div>
@@ -4586,7 +4586,7 @@ const getStockClientesReport = () => {
                                 <td key={talla} className="border p-2 md:p-2">
                                   <div className="flex flex-col items-center gap-2 md:gap-1">
                                     {/* Stock semaforizado */}
-                                    <span className={`text-base md:text-xs font-bold px-3 py-1.5 md:py-0.5 rounded-full ${
+                                    <span className={`text-base md:text-sm font-bold px-3 py-1.5 md:py-0.5 rounded-full ${
                                       stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
                                       stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
                                       stockDisponible > 0   ? 'bg-red-100 text-red-700' :
@@ -4611,7 +4611,7 @@ const getStockClientesReport = () => {
                                         }
                                       }}
                                       disabled={stockDisponible === 0}
-                                      className={`w-full px-1 py-3 md:py-1 border rounded text-center text-base md:text-xs disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                                      className={`w-full px-0 py-1 md:py-1 border rounded text-center text-4xl md:text-lg disabled:bg-gray-100 disabled:cursor-not-allowed ${
                                         colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
                                           ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
                                           : ''
@@ -4635,7 +4635,7 @@ const getStockClientesReport = () => {
                       setSelectedProductModel(null);
                       setColorQuantities({});
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-base flex items-center justify-center gap-2"
                   >
                     <Plus size={18} />
                     Agregar Más
@@ -4676,7 +4676,7 @@ const getStockClientesReport = () => {
     setSelectedProductModel(null);
   }}
   disabled={!hasQuantity}
-  className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
+  className={`flex-1 px-4 py-2 rounded-lg font-medium text-base ${
     hasQuantity
       ? 'bg-black text-white hover:bg-gray-800'
       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -4692,11 +4692,11 @@ const getStockClientesReport = () => {
 
         {/* RIGHT: Cart & Checkout */}
         <div>
-          <h3 className="font-bold mb-3 text-lg md:text-base">Resumen de Compra</h3>
+          <h3 className="font-bold mb-3 text-lg md:text-lg">Resumen de Compra</h3>
 
           {/* Client Selection */}
           <div className="mb-4">
-            <label className="block text-base md:text-sm font-medium mb-1">Cliente *</label>
+            <label className="block text-base md:text-xl font-medium mb-1">Cliente *</label>
             <div className="relative">
               <input
                 type="text"
@@ -4707,7 +4707,7 @@ const getStockClientesReport = () => {
                   setShowClientResults(true);
                 }}
                 onFocus={() => setShowClientResults(true)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-sm"
+                className="w-full px-3 py-3 border rounded-lg focus:ring-3 focus:ring-black/10 outline-none text-lg"
               />
 
               {showClientResults && clientSearch && (
@@ -4723,8 +4723,8 @@ const getStockClientesReport = () => {
                         }}
                         className="w-full px-3 py-2 text-left hover:bg-gray-50"
                       >
-                        <p className="font-medium text-sm">{client.nombre}</p>
-                        {client.dni && <p className="text-xs text-gray-500">DNI: {client.dni}</p>}
+                        <p className="font-medium text-base">{client.nombre}</p>
+                        {client.dni && <p className="text-base text-gray-500">DNI: {client.dni}</p>}
                       </button>
                     ))
                   ) : (
@@ -4734,7 +4734,7 @@ const getStockClientesReport = () => {
                         setShowClientResults(false);
                         setNewClient({ ...newClient, nombre: clientSearch });
                       }}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-50 text-blue-600 text-sm"
+                      className="w-full px-3 py-3 text-left hover:bg-gray-50 text-blue-600 text-base"
                     >
                       + Crear nuevo cliente "{clientSearch}"
                     </button>
@@ -4753,21 +4753,21 @@ const getStockClientesReport = () => {
 
           {showCreateClient && (
             <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-              <h4 className="font-medium mb-3 text-sm">Crear Nuevo Cliente</h4>
+              <h4 className="font-medium mb-3 text-base">Crear Nuevo Cliente</h4>
               <div className="space-y-2">
                 <input
                   type="text"
                   placeholder="Nombre *"
                   value={newClient.nombre}
                   onChange={(e) => setNewClient({...newClient, nombre: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-sm"
+                  className="w-full px-3 py-2 border rounded text-base"
                 />
                 <input
                   type="text"
                   placeholder="DNI *"
                   value={newClient.dni}
                   onChange={(e) => setNewClient({...newClient, dni: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-sm"
+                  className="w-full px-3 py-2 border rounded text-base"
                   maxLength="8"
                 />
                 <input
@@ -4775,25 +4775,25 @@ const getStockClientesReport = () => {
                   placeholder="Teléfono"
                   value={newClient.telefono}
                   onChange={(e) => setNewClient({...newClient, telefono: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-sm"
+                  className="w-full px-3 py-2 border rounded text-base"
                 />
                 <input
                   type="text"
                   placeholder="Departamento"
                   value={newClient.departamento}
                   onChange={(e) => setNewClient({...newClient, departamento: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-sm"
+                  className="w-full px-3 py-2 border rounded text-base"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowCreateClient(false)}
-                    className="flex-1 px-3 py-2 bg-gray-200 rounded text-sm"
+                    className="flex-1 px-3 py-2 bg-gray-200 rounded text-base"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={addClient}
-                    className="flex-1 px-3 py-2 bg-black text-white rounded text-sm"
+                    className="flex-1 px-3 py-2 bg-black text-white rounded text-base"
                   >
                     Guardar
                   </button>
@@ -4803,7 +4803,7 @@ const getStockClientesReport = () => {
           )}
 
           <div className="mb-3">
-            <label className="block text-sm font-medium mb-1">Medio de Captación</label>
+            <label className="block text-base font-medium mb-1">Medio de Captación</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setSalesChannel('LIVE')}
@@ -4829,12 +4829,12 @@ const getStockClientesReport = () => {
           </div>
 
           <div className="mb-3">
-            <label className="block text-sm font-medium mb-1">Fecha</label>
+            <label className="block text-base font-medium mb-1">Fecha</label>
             <input
               type="date"
               value={saleDate}
               onChange={(e) => setSaleDate(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-sm"
+              className="w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-base"
             />
           </div>
 
@@ -4975,7 +4975,7 @@ const getStockClientesReport = () => {
 
 {/* MODAL: Ver Venta */}
 {viewingSale && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-base flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Detalle de Venta</h2>
