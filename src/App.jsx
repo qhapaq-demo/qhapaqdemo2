@@ -12,8 +12,6 @@ import {
   Warehouse,
   ClipboardListIcon
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { supabase, getPeruDateTime } from './supabaseConfig';
 
 // Logo placeholder (ajusta la ruta según tu proyecto)
@@ -194,506 +192,6 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   );
   if (!swatch?.image_url) return null;
   return `${swatch.image_url}?width=80&height=80&quality=70`;
-};
-  // ============================================
-  // FUNCIÓN PARA DESCARGAR REPORTE EN PDF
-  // ============================================
-  const descargarReportePDF = (tipoReporte) => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
-    const pageWidth = doc.internal.pageSize.getWidth();   // 297mm
-    const pageHeight = doc.internal.pageSize.getHeight(); // 210mm
-    const margin = 15;
-
-    // ── HEADER NEGRO ──────────────────────────────
-    doc.setFillColor(0, 0, 0);
-    doc.rect(0, 30, pageWidth, 38, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(32);
-    doc.setFont(undefined, 'bold');
-    doc.text('ABermud', margin, 44);
-
-    doc.setFontSize(14);
-    doc.setFont(undefined, 'italic');
-    doc.text('Lo bueno va contigo', margin, 52);
-
-    doc.setFont(undefined, 'normal');
-    doc.setFontSize(12);
-    doc.text(`Fecha: ${fecha}`, margin, 60);
-
-    // ── TÍTULO DEL REPORTE ────────────────────────
-    let tituloReporte = '';
-    // Calcular rango real desde los datos
-const todasLasFechas = tipoReporte === 'movimientos'
-  ? Object.keys(getIngresoStockReport())
-  : tipoReporte === 'salidas'
-  ? Object.keys(getSalidaVentasReport())
-  : [fecha];
-
-const fechasOrdenadas = todasLasFechas.sort();
-const rangoTexto = fechasOrdenadas.length > 1
-  ? `${fechasOrdenadas[0].split('-').reverse().join('/')} AL ${fechasOrdenadas[fechasOrdenadas.length - 1].split('-').reverse().join('/')}`
-  : reportFilter === 'personalizado'
-  ? `${customDateRange.start.split('-').reverse().join('/')} AL ${customDateRange.end.split('-').reverse().join('/')}`
-  : fecha;
-
-    if (tipoReporte === 'stock acumulado') tituloReporte = `STOCK ACUMULADO AL ${rangoTexto}`;
-    if (tipoReporte === 'movimientos')     tituloReporte = `MOVIMIENTOS DE STOCK ${rangoTexto}`;
-    if (tipoReporte === 'salidas')         tituloReporte = `SALIDA (VENTAS) ${rangoTexto}`;
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
-    doc.text(tituloReporte, margin, 80);
-
-    // ── PREPARAR DATOS ────────────────────────────
-    const stockData = getStockALaFechaReport();
-const ingresoData = getIngresoStockReport();
-const salidaData = getSalidaVentasReport();
-
-const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
-  if (tipoReporte === 'movimientos') {
-    const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
-    const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
-    return totalB - totalA;
-  }
-  if (tipoReporte === 'salidas') {
-    const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
-    const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
-    return totalB - totalA;
-  }
-  return (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0);
-});
-
-    const headers = ['FECHA', ...sortedProducts.map(p => p.modelo)];
-    let bodyData = [];
-
-    if (tipoReporte === 'stock_fecha') {
-      bodyData = [
-        [fecha, ...sortedProducts.map(p => String(stockData[p.modelo] || 0))],
-      ];
-    } else if (tipoReporte === 'movimientos') {
-  const ingresoData = getIngresoStockReport();
-  if (Object.keys(ingresoData).length === 0) {
-    bodyData = [['Sin ingresos en este período', ...sortedProducts.map(() => '')]];
-  } else {
-    bodyData = Object.entries(ingresoData).map(([f, modelos]) => [
-      f.split('-').reverse().join('/'),
-      ...sortedProducts.map(p => {
-        const d = modelos[p.modelo];
-        if (!d) return '-';
-        let texto = '';
-        if (d.ingreso !== 0) texto += d.ingreso;
-        if (d.correccion !== 0) texto += (texto ? ' [C:' : '[C:') + d.correccion + ']';
-        return texto || '-';
-      })
-    ]);
-    bodyData.push([
-      'TOTAL',
-      ...sortedProducts.map(p => String(
-        Object.values(ingresoData).reduce((sum, m) => 
-          sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
-        )
-      ))
-    ]);
-  }
-    } else if (tipoReporte === 'salidas') {
-      const salidaData = getSalidaVentasReport();
-      if (Object.keys(salidaData).length === 0) {
-        bodyData = [['Sin ventas en este período', ...sortedProducts.map(() => '')]];
-      } else {
-        bodyData = Object.entries(salidaData).map(([f, modelos]) => [
-          f.split('-').reverse().join('/'),
-          ...sortedProducts.map(p => String(modelos[p.modelo] || '0'))
-        ]);
-        bodyData.push([
-          'TOTAL',
-          ...sortedProducts.map(p => String(
-            Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)
-          ))
-        ]);
-      }
-    }
-
-    // ── CALCULAR ANCHO DE COLUMNAS ────────────────
-    const tableWidth = pageWidth - margin * 2;             // ancho disponible
-    const totalCols = headers.length;
-    const fechaColWidth = 30;                              // columna FECHA fija
-    const restWidth = tableWidth - fechaColWidth;
-    const colWidth = restWidth / (totalCols - 1);          // resto dividido igual
-
-    const columnStyles = { 0: { cellWidth: fechaColWidth, halign: 'left', fontStyle: 'bold' } };
-    for (let i = 1; i < totalCols; i++) {
-      columnStyles[i] = { cellWidth: colWidth, halign: 'center' };
-    }
-
-    // ── GENERAR TABLA ─────────────────────────────
-    doc.autoTable({
-      startY: 85,
-      head: [headers],
-      body: bodyData,
-      margin: { left: margin, right: margin },
-      tableWidth: tableWidth,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [0, 0, 0],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        halign: 'center',
-        fontSize: 8,
-        cellPadding: 3,
-      },
-      bodyStyles: {
-        fontSize: 9,
-        cellPadding: 3,
-      },
-      columnStyles,
-      styles: {
-        lineColor: [200, 200, 200],
-        lineWidth: 0.3,
-        overflow: 'linebreak',
-      },
-      // Fila TOTAL en negrita (solo stock_fecha)
-      didParseCell: (data) => {
-        if (tipoReporte === 'stock_fecha' && data.row.index === 1 && data.section === 'body') {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fillColor = [230, 230, 230];
-        }
-      }
-    });
-
-    // ── RESUMEN (solo Stock a la Fecha) ───────────
-    if (tipoReporte === 'stock_fecha') {
-      const finalY = doc.lastAutoTable.finalY + 8;
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text('RESUMEN DE INVENTARIO', margin, finalY);
-      doc.setFont(undefined, 'normal');
-      doc.setFontSize(10);
-      const totalUnidades = Object.values(stockData).reduce((sum, qty) => sum + qty, 0);
-      doc.text(`Total de productos: ${products.length}`, margin, finalY + 6);
-      doc.text(`Total de unidades: ${totalUnidades}`, margin + 60, finalY + 6);
-    }
-
-    // ── GUARDAR ───────────────────────────────────
-    doc.save(`${tituloReporte.replace(/[\s/()]/g, '_')}.pdf`);
-  };
-
-// ============================================
-// FUNCIONES DE GENERACIÓN DE PDF - REPORTES
-// ============================================
-
-// PDF 1: STOCK GENERAL
-const generarPDFStockGeneral = () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE STOCK - GENERAL');
-
-  // Fecha
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
-  doc.text(`FECHA: ${fecha}`, 14, yPos);
-  yPos += 10;
-
-  const reportData = getStockGeneralReport();
-
-  reportData.forEach((productData) => {
-    if (yPos > 250) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    const totalProducto = Object.values(productData.stockByColor).reduce((sum, tallas) => 
-      sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0);
-
-    doc.setFillColor(0, 0, 0);
-    doc.rect(14, yPos, 167, 10, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(productData.modelo, pageWidth / 2, yPos + 7, { align: 'center' });
-    doc.setFontSize(14);
-    doc.text(`Total: ${totalProducto}`, 178, yPos + 7, { align: 'right' });
-    doc.setTextColor(0, 0, 0);
-    yPos += 14;
-
-    const tableData = Object.entries(productData.stockByColor).map(([color, tallas]) => [
-  color,
-  tallas.S || 0,
-  tallas.M || 0,
-  tallas.L || 0,
-  tallas.XL || 0
-]);
-
-const totalRow = [
-  'TOTAL',
-  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.S || 0), 0),
-  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.M || 0), 0),
-  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.L || 0), 0),
-  Object.values(productData.stockByColor).reduce((sum, t) => sum + (t.XL || 0), 0),
-];
-
-   doc.autoTable({
-  startY: yPos,
-  head: [['COLOR', 'S', 'M', 'L', 'XL']],  // ← AGREGAR XL
-  body: tableData,
-  theme: 'grid',
-  headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // ← halign center aquí
-  styles: { fontSize: 10, cellPadding: 3, textColor: [0, 0, 0] },
-  columnStyles: {
-    0: { cellWidth: 55 },
-    1: { halign: 'center', cellWidth: 28 },
-    2: { halign: 'center', cellWidth: 28 },
-    3: { halign: 'center', cellWidth: 28 },
-    4: { halign: 'center', cellWidth: 28 }  // ← XL
-  },
-  margin: { left: 14, right: 14 }
-});
-
-    yPos = doc.lastAutoTable.finalY + 10;
-  });
-
-  doc.save(`Stock_General_${fecha.replace(/\//g, '-')}.pdf`);
-};
-
-// PDF 2: STOCK CLIENTES
-const generarPDFStockClientes = () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE STOCK - CLIENTES');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
-  doc.text(`FECHA: ${fecha}`, 14, yPos);
-  doc.text('Colores disponibles (sin cantidades)', 14, yPos + 6);
-  yPos += 16;
-
-  const reportData = getStockClientesReport();
-
-  reportData.forEach((productData) => {
-    if (yPos > 240) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    doc.setFillColor(0, 0, 0);
-    doc.rect(14, yPos, 167, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(productData.modelo, pageWidth / 2, yPos + 5.5, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
-    yPos += 12;
-
-const tableData = [[
-  productData.colorsByTalla.S?.join('\n') || '-',
-  productData.colorsByTalla.M?.join('\n') || '-',
-  productData.colorsByTalla.L?.join('\n') || '-',
-  productData.colorsByTalla.XL?.join('\n') || '-'
-]];
-
-doc.autoTable({
-  startY: yPos,
-  head: [['S', 'M', 'L', 'XL']],
-  body: tableData,
-  theme: 'grid',
-  headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
-  styles: { fontSize: 9, cellPadding: 5, valign: 'top' },
-  columnStyles: {
-    0: { halign: 'left', cellWidth: 42 },
-    1: { halign: 'left', cellWidth: 42 },
-    2: { halign: 'left', cellWidth: 42 },
-    3: { halign: 'left', cellWidth: 42 }
-  },
-  margin: { left: 14, right: 14 }
-});
-
-    yPos = doc.lastAutoTable.finalY + 10;
-  });
-
-  doc.save(`Stock_Clientes_${fecha.replace(/\//g, '-')}.pdf`);
-};
-
-// PDF 3: REPORTE DE VENTAS
-const generarPDFReporteVentas = () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  let yPos = agregarEncabezadoPDF(doc, 'REPORTE DE VENTAS');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
-  doc.text(`FECHA: ${fecha}`, 14, yPos);
-  const periodoText = reportFilter === 'hoy' ? 'Hoy' : `${customDateRange.start} a ${customDateRange.end}`;
-  doc.text(`Período: ${periodoText}`, 14, yPos + 6);
-  yPos += 16;
-
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('VENTAS POR MODELO', 14, yPos);
-  yPos += 8;
-
-  const { start, end } = getDateRangeForFilter(reportFilter);
-  const filteredSales = sales.filter(s => s.fecha >= start && s.fecha <= end);
-
-  const ventasPorFechaModelo = {};
-  const modelosSet = new Set();
-  products.filter(p => p.activo !== false).forEach(p => modelosSet.add(p.modelo));
-
-  filteredSales.forEach(sale => {
-    if (!ventasPorFechaModelo[sale.fecha]) ventasPorFechaModelo[sale.fecha] = {};
-    sale.items.forEach(item => {
-      if (!ventasPorFechaModelo[sale.fecha][item.modelo]) ventasPorFechaModelo[sale.fecha][item.modelo] = 0;
-      ventasPorFechaModelo[sale.fecha][item.modelo] += item.quantity;
-    });
-  });
-
-  const modelos = Array.from(modelosSet);
-  const tableHead = [['FECHA', ...modelos.map(m => abreviarNombreProducto(m)), 'TOTAL']];
-  const tableBody = [];
-  const fechas = Object.keys(ventasPorFechaModelo).sort();
-  const totalesPorModelo = {};
-  modelos.forEach(m => totalesPorModelo[m] = 0);
-
-  fechas.forEach(fecha => {
-    const row = [fecha.split('-').reverse().join('/')];
-    let totalFecha = 0;
-    modelos.forEach(modelo => {
-      const cantidad = ventasPorFechaModelo[fecha][modelo] || 0;
-      row.push(cantidad);
-      totalesPorModelo[modelo] += cantidad;
-      totalFecha += cantidad;
-    });
-    row.push(totalFecha);
-    tableBody.push(row);
-  });
-
-  const totalRow = ['TOTAL'];
-  let granTotal = 0;
-  modelos.forEach(modelo => {
-    totalRow.push(totalesPorModelo[modelo]);
-    granTotal += totalesPorModelo[modelo];
-  });
-  totalRow.push(granTotal);
-  tableBody.push(totalRow);
-
-  doc.autoTable({
-    startY: yPos,
-    head: tableHead,
-    body: tableBody,
-    theme: 'grid',
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8, cellPadding: 2 },
-    columnStyles: { 0: { cellWidth: 25, fontStyle: 'bold' } },
-    didParseCell: (data) => {
-      if (data.row.index === tableBody.length - 1) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [240, 240, 240];
-      }
-    }
-  });
-
-  doc.save(`Reporte_Ventas_${fecha.replace(/\//g, '-')}.pdf`);
-};
-
-// PDF 4: ANÁLISIS DE VENTAS
-const generarPDFAnalisisVentas = () => {
-  const doc = new jsPDF();
-  let yPos = agregarEncabezadoPDF(doc, 'ANÁLISIS DE VENTAS');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const fecha = getPeruDateTime().fecha.split('-').reverse().join('/');
-  doc.text(`FECHA: ${fecha}`, 14, yPos);
-  const periodoText = reportFilter === 'hoy' ? 'Hoy' : `${customDateRange.start} a ${customDateRange.end}`;
-  doc.text(`Período: ${periodoText}`, 14, yPos + 6);
-  yPos += 16;
-
-  const analisis = getAnalisisVentasReport();
-
-  // SECCIÓN 1: POR MEDIO DE VENTA
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('POR MEDIO DE VENTA', 14, yPos);
-  yPos += 8;
-
-  const tablaMedio = [
-    ['TIENDA', analisis.porMedio.TIENDA?.toFixed(2) || '0.00'],
-    ['LIVE', analisis.porMedio.LIVE?.toFixed(2) || '0.00']
-  ];
-
-  doc.autoTable({
-    startY: yPos,
-    head: [['MEDIO', 'MONTO']],
-    body: tablaMedio,
-    theme: 'grid',
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 3 },
-    columnStyles: {
-      0: { cellWidth: 80 },
-      1: { halign: 'right', cellWidth: 40 }
-    },
-    margin: { left: 14 }
-  });
-
-  yPos = doc.lastAutoTable.finalY + 15;
-
-  // SECCIÓN 2: TOP 10 CLIENTES
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOP 10 CLIENTES', 14, yPos);
-  yPos += 8;
-
-  const tablaClientes = analisis.topClientes.map((c, idx) => [
-    `${idx + 1}`, c.nombre, c.total.toFixed(2)
-  ]);
-
-  doc.autoTable({
-    startY: yPos,
-    head: [['#', 'CLIENTE', 'MONTO']],
-    body: tablaClientes.length > 0 ? tablaClientes : [['', 'No hay datos', '']],
-    theme: 'grid',
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 3 },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 15 },
-      1: { cellWidth: 90 },
-      2: { halign: 'right', cellWidth: 30 }
-    },
-    margin: { left: 14 }
-  });
-
-  yPos = doc.lastAutoTable.finalY + 15;
-
-  // SECCIÓN 3: POR DEPARTAMENTO
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('POR DEPARTAMENTO', 14, yPos);
-  yPos += 8;
-
-  const tablaDepartamento = Object.entries(analisis.porDepartamento)
-    .sort((a, b) => b[1] - a[1])
-    .map(([dept, monto]) => [dept, monto.toFixed(2)]);
-
-  doc.autoTable({
-    startY: yPos,
-    head: [['DEPARTAMENTO', 'MONTO']],
-    body: tablaDepartamento.length > 0 ? tablaDepartamento : [['No hay datos', '']],
-    theme: 'grid',
-    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 3 },
-    columnStyles: {
-      0: { cellWidth: 80 },
-      1: { halign: 'right', cellWidth: 40 }
-    },
-    margin: { left: 14 }
-  });
-
-  doc.save(`Analisis_Ventas_${fecha.replace(/\//g, '-')}.pdf`);
 };
 
   // ============================================
@@ -2270,7 +1768,7 @@ const getStockClientesReport = () => {
         md:block bg-white border-b sticky top-18 z-30 shadow-sm
       `}>
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2 text-2xl">
             {[
               { id: 'dashboard', icon: Home, label: 'Dashboard' },
               { id: 'productos', icon: Package, label: 'Productos' },
@@ -2600,7 +2098,7 @@ const getStockClientesReport = () => {
             placeholder="Buscar productos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
           />
         </div>
       </div>
@@ -2656,10 +2154,10 @@ const getStockClientesReport = () => {
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-lg mb-1">{product.modelo}</h3>
-                <p className="text-emerald-600 font-bold text-lg">S/ {product.precio_venta}</p>
+                <h3 className="font-bold text-2xl mb-1">{product.modelo}</h3>
+                <p className="text-emerald-600 font-bold text-xl">S/ {product.precio_venta}</p>
                 {product.precio_compra > 0 && (
-                  <p className="text-xs text-gray-500">Compra: S/ {product.precio_compra}</p>
+                  <p className="text-sm text-gray-500">Compra: S/ {product.precio_compra}</p>
                 )}
               </div>
               
@@ -2670,14 +2168,14 @@ const getStockClientesReport = () => {
                   className="p-2 hover:bg-gray-100 rounded-lg"
                   title="Editar"
                 >
-                  <Edit2 size={18} />
+                  <Edit2 size={20} />
                 </button>
                 <button
                   onClick={() => deleteProduct(product.id)}
                   className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
                   title="Eliminar"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} />
                 </button>
                 <button
                   onClick={() => toggleProductActive(product.id, product.activo)}
@@ -2696,20 +2194,20 @@ const getStockClientesReport = () => {
         </div>
 
         {/* Stock y colores */}
-        <div className="space-y-1 text-sm">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-600">Stock Total:</span>
-            <span className={`font-bold ${totalStock < 10 ? 'text-orange-600' : 'text-emerald-600'}`}>
+        <div className="space-y-3 text-base">
+          <div className="flex items-center justify-between text-xl">
+            <span className="text-gray-700">Stock Total:</span>
+            <span className={`font-bold ${totalStock < 14 ? 'text-orange-600' : 'text-emerald-600'}`}>
               {totalStock} unidades
             </span>
           </div>
 
           {product.colors && product.colors.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">Colores:</p>
+              <p className="text-xl font-bold mb-1">Colores:</p>
               <div className="flex flex-wrap gap-1">
                 {product.colors.map(color => (
-                  <span key={color} className="text-xs bg-gray-100 px-2 py-0.5 rounded">
+                  <span key={color} className="text-xl bg-gray-100 px-2 py-0.5 rounded">
                     {color}
                   </span>
                 ))}
@@ -2743,7 +2241,7 @@ const getStockClientesReport = () => {
         onClick={() => setShowAddStock(true)}
         className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
       >
-        <Plus size={20} />
+        <Plus size={22} />
         Agregar Stock
       </button>
     </div>
@@ -2766,11 +2264,11 @@ const getStockClientesReport = () => {
             <div className="flex gap-2 items-center">
               <input type="date" value={customDateRange.start}
                 onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
-                className="px-2 py-1.5 border rounded-lg text-sm" />
+                className="px-2 py-1.5 border rounded-lg text-base" />
               <span className="text-sm">a</span>
               <input type="date" value={customDateRange.end}
                 onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
-                className="px-2 py-1.5 border rounded-lg text-sm" />
+                className="px-2 py-1.5 border rounded-lg text-base" />
             </div>
           )}
         </div>
@@ -2781,17 +2279,17 @@ const getStockClientesReport = () => {
     <button className="w-full p-4 bg-blue-50 border-l-4 border-blue-500 flex items-center justify-between hover:bg-blue-100 transition-colors">
       <div className="flex items-center gap-2 flex-1">
         <BarChart3 size={20} className="text-blue-600" />
-        <span className="font-bold text-left text-sm md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+        <span className="font-bold text-left text-base md:text-base">STOCK ACUMULADO AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
       </div>
       <button onClick={() => setShowStockModal('stock_fecha')} className="p-2 hover:bg-blue-200 rounded-lg transition-colors" title="Ver reporte">
-        <Eye size={20} className="text-gray-600" />
+        <Eye size={24} className="text-gray-600" />
       </button>
     </button>
     <div className="p-2 overflow-x-auto">
-      <table className="w-full border-collapse text-xs">
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
+            <th className="border p-1 text-left font-bold w-12">FECHA</th>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
@@ -2806,12 +2304,12 @@ const getStockClientesReport = () => {
         </thead>
         <tbody>
           <tr>
-            <td className="border p-1 font-medium">{getPeruDateTime().fecha.split('-').reverse().join('/')}</td>
+            <td className="border p-1 font-medium">{getPeruDateTime().fecha.split('-').slice(1).reverse().join('/')}</td>
             {(() => {
               const stockData = getStockALaFechaReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
               return sortedProducts.map(p => (
-                <td key={p.id} className="border p-2 text-center">{stockData[p.modelo] || 0}</td>
+                <td key={p.id} className="border p-2 text-center text-base">{stockData[p.modelo] || 0}</td>
               ));
             })()}
           </tr>
@@ -2825,22 +2323,20 @@ const getStockClientesReport = () => {
     <button className="w-full p-4 bg-green-50 border-l-4 border-green-500 flex items-center justify-between hover:bg-green-100 transition-colors">
       <div className="flex items-center gap-2 flex-1">
         <Package size={20} className="text-green-600" />
-        <span className="font-bold text-left text-sm md:text-base">MOVIMIENTOS DE STOCK AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+        <span className="font-bold text-left text-base md:text-base">MOVIMIENTOS DE STOCK AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => descargarReportePDF('movimientos')} className="p-2 hover:bg-green-200 rounded-lg transition-colors" title="Descargar PDF">
-          <FileDown size={20} className="text-red-600" />
-        </button>
+        
         <button onClick={() => setShowStockModal('movimientos')} className="p-2 hover:bg-green-200 rounded-lg transition-colors" title="Ver reporte">
-          <Eye size={20} className="text-gray-600" />
+          <Eye size={24} className="text-gray-600" />
         </button>
       </div>
     </button>
     <div className="p-2 overflow-x-auto">
-      <table className="w-full border-collapse text-xs">
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
+            <th className="border p-1 text-left font-bold w-12">FECHA</th>
             {(() => {
               const ingresoData = getIngresoStockReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
@@ -2869,7 +2365,7 @@ const getStockClientesReport = () => {
               <>
                 {Object.entries(ingresoData).map(([fecha, modelos]) => (
                   <tr key={fecha}>
-                    <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                    <td className="border p-1 font-medium">{fecha.split('-').slice(1).reverse().join('/')}</td>
                     {sortedProducts.map(p => (
                       <td key={p.id} className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
                         onClick={() => {
@@ -2881,8 +2377,8 @@ const getStockClientesReport = () => {
                         }}>
                         {modelos[p.modelo] ? (
                           <div className="flex items-center justify-center gap-1">
-                            {modelos[p.modelo].ingreso !== 0 && <span className="text-sm">{modelos[p.modelo].ingreso}</span>}
-                            {modelos[p.modelo].correccion !== 0 && <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>}
+                            {modelos[p.modelo].ingreso !== 0 && <span className="text-lg">{modelos[p.modelo].ingreso}</span>}
+                            {modelos[p.modelo].correccion !== 0 && <span className="text-red-600 font-bold text-sm">⚠️{modelos[p.modelo].correccion}</span>}
                             {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
                           </div>
                         ) : '-'}
@@ -2893,7 +2389,7 @@ const getStockClientesReport = () => {
                 <tr className="bg-gray-50 font-bold">
                   <td className="border p-2">TOTAL</td>
                   {sortedProducts.map(p => (
-                    <td key={p.id} className="border p-2 text-center">
+                    <td key={p.id} className="border p-2 text-center text-base font-bold">
                       {Object.values(ingresoData).reduce((sum, m) => sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0)}
                     </td>
                   ))}
@@ -2917,22 +2413,20 @@ const getStockClientesReport = () => {
     <button className="w-full p-4 bg-red-50 border-l-4 border-red-500 flex items-center justify-between hover:bg-red-100 transition-colors">
       <div className="flex items-center gap-2 flex-1">
         <ShoppingCart size={20} className="text-red-600" />
-        <span className="font-bold text-left text-sm md:text-base">SALIDA - VENTAS AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
+        <span className="font-bold text-left text-base md:text-base">SALIDA - VENTAS AL {getPeruDateTime().fecha.split('-').reverse().join('/')}</span>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => descargarReportePDF('salidas')} className="p-2 hover:bg-red-200 rounded-lg transition-colors" title="Descargar PDF">
-          <FileDown size={20} className="text-red-600" />
-        </button>
+        
         <button onClick={() => setShowStockModal('salidas')} className="p-2 hover:bg-red-200 rounded-lg transition-colors" title="Ver reporte">
-          <Eye size={20} className="text-gray-600" />
+          <Eye size={24} className="text-gray-600" />
         </button>
       </div>
     </button>
     <div className="p-2 overflow-x-auto">
-      <table className="w-full border-collapse text-xs">
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1.5 text-left font-bold min-w-[60px]">FECHA</th>
+            <th className="border p-1 text-left font-bold w-12">FECHA</th>
             {(() => {
               const salidaData = getSalidaVentasReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
@@ -2961,16 +2455,16 @@ const getStockClientesReport = () => {
               <>
                 {Object.entries(salidaData).map(([fecha, modelos]) => (
                   <tr key={fecha}>
-                    <td className="border p-1 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                    <td className="border p-1 font-medium">{fecha.split('-').slice(1).reverse().join('/')}</td>
                     {sortedProducts.map(p => (
-                      <td key={p.id} className="border p-1.5 text-center">{modelos[p.modelo] || '0'}</td>
+                      <td key={p.id} className="border p-1.5 text-center text-base">{modelos[p.modelo] || '0'}</td>
                     ))}
                   </tr>
                 ))}
                 <tr className="bg-gray-50 font-bold">
                   <td className="border p-2">TOTAL</td>
                   {sortedProducts.map(p => (
-                    <td key={p.id} className="border p-2 text-center">
+                    <td key={p.id} className="border p-2 text-center text-base font-bold">
                       {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
                     </td>
                   ))}
@@ -2999,9 +2493,9 @@ const getStockClientesReport = () => {
       <div className="bg-black text-white p-3 md:p-6 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg md:text-2xl font-bold">ABermud</h1>
-            <p className="text-xs md:text-sm italic">Lo bueno va contigo</p>
-            <p className="text-[10px] md:text-xs mt-1 md:mt-2 opacity-90">
+            <h1 className="text-xl md:text-2xl font-bold">ABermud</h1>
+            <p className="text-base md:text-sm italic">Lo bueno va contigo</p>
+            <p className="text-sm md:text-sm mt-1 md:mt-2 opacity-90">
               {showStockModal === 'stock_fecha' && 'Reporte de Stock Acumulado'}
               {showStockModal === 'movimientos' && 'Reporte de Movimientos de Stock'}
               {showStockModal === 'salidas' && 'Reporte de Salida (Ventas)'}
@@ -3021,15 +2515,17 @@ const getStockClientesReport = () => {
       <div className="flex-1 overflow-auto p-3 md:p-6 bg-gray-50">
         <div className="bg-white rounded-lg p-3 md:p-6 shadow-sm">
           {/* Fecha del reporte */}
-          <div className="mb-3 md:mb-4 pb-2 md:pb-3 border-b">
-            <p className="text-xs md:text-sm text-gray-600">
-              <span className="font-semibold">Fecha:</span> {getPeruDateTime().fecha.split('-').reverse().join('/')}
-            </p>
-          </div>
+{showStockModal !== 'stock_fecha' && (
+  <div className="mb-3 md:mb-4 pb-2 md:pb-3 border-b">
+    <p className="text-base md:text-sm text-gray-600">
+      <span className="font-semibold">Fecha:</span> {getPeruDateTime().fecha.split('-').reverse().join('/')}
+    </p>
+  </div>
+)}
 
           {/* TÍTULO DEL REPORTE */}
 <div className="mb-3 md:mb-4">
-  <h2 className="text-sm md:text-xl font-bold uppercase">
+  <h2 className="text-base md:text-xl font-bold uppercase">
     {showStockModal === 'stock_fecha' && 
       `Stock Acumulado al ${getPeruDateTime().fecha.split('-').reverse().join('/')}`
     }
@@ -3054,7 +2550,7 @@ const getStockClientesReport = () => {
   </h2>
 
   {reportFilter === 'personalizado' && showStockModal !== 'stock_fecha' && (
-    <p className="text-xs md:text-sm text-gray-600 mt-1">
+    <p className="text-sm md:text-sm text-gray-600 mt-1">
       Filtrado: {customDateRange.start.split('-').reverse().join('/')} - {customDateRange.end.split('-').reverse().join('/')}
     </p>
   )}
@@ -3065,7 +2561,7 @@ const getStockClientesReport = () => {
             <table className="w-full border-collapse border border-gray-300">
               <thead>
                 <tr className="bg-black text-white">
-                  <th className="border border-gray-300 p-1 md:p-2 text-left font-bold sticky left-0 bg-black z-10 text-[8px] md:text-sm min-w-[60px] md:min-w-[80px]">
+                  <th className="border border-gray-300 p-1 text-left font-bold sticky left-0 bg-black z-10 text-[8px] md:text-sm w-12">
                     FECHA
                   </th>
                   {(() => {
@@ -3090,8 +2586,8 @@ const getStockClientesReport = () => {
 {showStockModal === 'stock_fecha' && (
   <>
     <tr className="even:bg-gray-50">
-      <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-        {getPeruDateTime().fecha.split('-').reverse().join('/')}
+      <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm w-12">
+        {getPeruDateTime().fecha.split('-').slice(1).reverse().join('/')}
       </td>
       {(() => {
         const stockData = getStockALaFechaReport();
@@ -3103,7 +2599,7 @@ const getStockClientesReport = () => {
         return sortedProducts.map(p => (
           <td
             key={p.id}
-            className="border border-gray-300 p-1 md:p-2 text-center font-bold text-sm md:text-sm"
+            className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm"
           >
             {stockData[p.modelo] || 0}
           </td>
@@ -3126,8 +2622,8 @@ const getStockClientesReport = () => {
     return Object.keys(ingresoData).length > 0 ? (
       Object.entries(ingresoData).map(([fecha, modelos]) => (
         <tr key={fecha} className="even:bg-gray-50">
-          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-            {fecha.split('-').reverse().join('/')}
+          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm w-12">
+            {fecha.split('-').slice(1).reverse().join('/')}
           </td>
           {sortedProducts.map(p => (
             <td 
@@ -3144,10 +2640,10 @@ const getStockClientesReport = () => {
     {modelos[p.modelo] ? (
       <div className="flex items-center justify-center gap-1">
                  {modelos[p.modelo].ingreso !== 0 && (
-                   <span className="text-sm">{modelos[p.modelo].ingreso}</span>
+                   <span className="font-bold text-base md:text-sm">{modelos[p.modelo].ingreso}</span>
                  )}
                  {modelos[p.modelo].correccion !== 0 && (
-                   <span className="text-red-600 font-bold text-xs">⚠️{modelos[p.modelo].correccion}</span>
+                   <span className="text-red-600 font-bold text-sm">⚠️{modelos[p.modelo].correccion}</span>
                 )}
                 {modelos[p.modelo].ingreso === 0 && modelos[p.modelo].correccion === 0 && '-'}
               </div>
@@ -3173,7 +2669,7 @@ const getStockClientesReport = () => {
       const stockData = getStockALaFechaReport();
       const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
       return sortedProducts.map(p => (
-        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm">
           {Object.values(ingresoData).reduce((sum, m) => 
             sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0
           )}
@@ -3196,11 +2692,11 @@ const getStockClientesReport = () => {
     return Object.keys(salidaData).length > 0 ? (
       Object.entries(salidaData).map(([fecha, modelos]) => (
         <tr key={fecha} className="even:bg-gray-50">
-          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm">
-            {fecha.split('-').reverse().join('/')}
+          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm w-12">
+            {fecha.split('-').slice(1).reverse().join('/')}
           </td>
           {sortedProducts.map(p => (
-            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm">
               {modelos[p.modelo] || '-'}
             </td>
           ))}
@@ -3223,7 +2719,7 @@ const getStockClientesReport = () => {
                     <tr className="bg-gray-200 font-bold">
                       <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
                       {sortedProducts.map(p => (
-                        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center text-xs md:text-sm">
+                        <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm">
                           {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
                         </td>
                       ))}
@@ -3237,14 +2733,14 @@ const getStockClientesReport = () => {
           {/* RESUMEN (solo para Stock a la Fecha) */}
           {showStockModal === 'stock_fecha' && (
             <div className="mt-4 md:mt-6 p-3 md:p-4 bg-gray-100 rounded-lg">
-              <h3 className="font-bold text-xs md:text-sm uppercase mb-2">Resumen de Inventario</h3>
+              <h3 className="font-bold text-base md:text-sm uppercase mb-2">Resumen de Inventario</h3>
               <div className="grid grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
                 <div>
-                  <span className="text-gray-600">Total de productos:</span>
+                  <span className="text-sm gray-600">Total de productos:</span>
                   <span className="ml-2 font-bold">{products.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Total de unidades:</span>
+                  <span className="text-sm gray-600">Total de unidades:</span>
                   <span className="ml-2 font-bold">
                     {(() => {
                       const stockData = getStockALaFechaReport();
@@ -3518,109 +3014,81 @@ const getStockClientesReport = () => {
     </div>
 
     {/* Panel de Reportes - 4 Tarjetas */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      
-      {/* Tarjeta 1: Stock General */}
-      <div className="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-sm border">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold mb-1">Stock General</h3>
-            <p className="text-sm text-gray-600">Vista matricial con semaforización</p>
-          </div>
-          <FileText className="text-gray-400" size={24} />
-        </div>
-        <button
-          onClick={generarPDFStockGeneral}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-        >
-          <FileDown size={18} />
-          Exportar PDF
-        </button>
-        <button
-          onClick={() => setShowModalStockGeneral(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
-        >
-          <Eye size={18} />
-          Ver Vista Previa
-        </button>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  
+  {/* Tarjeta 1: Stock General */}
+  <div className="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-sm border">
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <h3 className="text-lg font-bold mb-1">Stock General</h3>
+        <p className="text-sm text-gray-600">Vista matricial con semaforización</p>
       </div>
-
-      {/* Tarjeta 2: Stock para Clientes */}
-      <div className="bg-gradient-to-br from-purple-100 to-white p-6 rounded-xl shadow-sm border">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold mb-1">Stock para Clientes</h3>
-            <p className="text-sm text-gray-600">Sin cantidades, solo colores</p>
-          </div>
-          <FileText className="text-gray-400" size={24} />
-        </div>
-        <button
-          onClick={generarPDFStockClientes}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-        >
-          <FileDown size={18} />
-          Exportar PDF
-        </button>
-        <button
-          onClick={() => setShowModalStockClientes(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
-        >
-          <Eye size={18} />
-          Ver Vista Previa
-        </button>
-      </div>
-
-      {/* Tarjeta 3: Reporte de Ventas */}
-      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold mb-1">Reporte de Ventas</h3>
-            <p className="text-sm text-gray-600">Por modelo</p>
-          </div>
-          <FileText className="text-emerald-600" size={24} />
-        </div>
-        <button
-          onClick={generarPDFReporteVentas}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-        >
-          <FileDown size={18} />
-          Exportar PDF
-        </button>
-        <button
-          onClick={() => setShowModalReporteVentas(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
-        >
-          <Eye size={18} />
-          Ver Vista Previa
-        </button>
-      </div>
-
-      {/* Tarjeta 4: Análisis de Ventas */}
-      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold mb-1">Análisis de Ventas</h3>
-            <p className="text-sm text-gray-600">Medio, clientes y departamento</p>
-          </div>
-          <FileText className="text-slate-600" size={24} />
-        </div>
-        <button
-          onClick={generarPDFAnalisisVentas}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-        >
-          <FileDown size={18} />
-          Exportar PDF
-        </button>
-        <button
-          onClick={() => setShowModalAnalisisVentas(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-black rounded-lg hover:bg-gray-300 font-medium transition-colors mt-2"
-        >
-          <Eye size={18} />
-          Ver Vista Previa
-        </button>
-      </div>
-
+      <FileText className="text-gray-400" size={24} />
     </div>
+    <button
+      onClick={() => setShowModalStockGeneral(true)}
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+    >
+      <Eye size={18} />
+      Ver Reporte
+    </button>
+  </div>
+
+  {/* Tarjeta 2: Stock para Clientes */}
+  <div className="bg-gradient-to-br from-purple-100 to-white p-6 rounded-xl shadow-sm border">
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <h3 className="text-lg font-bold mb-1">Stock para Clientes</h3>
+        <p className="text-sm text-gray-600">Sin cantidades, solo colores</p>
+      </div>
+      <FileText className="text-gray-400" size={24} />
+    </div>
+    <button
+      onClick={() => setShowModalStockClientes(true)}
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+    >
+      <Eye size={18} />
+      Ver Reporte
+    </button>
+  </div>
+
+  {/* Tarjeta 3: Reporte de Ventas */}
+  <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <h3 className="text-lg font-bold mb-1">Reporte de Ventas</h3>
+        <p className="text-sm text-gray-600">Por modelo</p>
+      </div>
+      <FileText className="text-emerald-600" size={24} />
+    </div>
+    <button
+      onClick={() => setShowModalReporteVentas(true)}
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+    >
+      <Eye size={18} />
+      Ver Reporte
+    </button>
+  </div>
+
+  {/* Tarjeta 4: Análisis de Ventas */}
+  <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
+    <div className="flex items-start justify-between mb-4">
+      <div>
+        <h3 className="text-lg font-bold mb-1">Análisis de Ventas</h3>
+        <p className="text-sm text-gray-600">Medio, clientes y departamento</p>
+      </div>
+      <FileText className="text-slate-600" size={24} />
+    </div>
+    <button
+      onClick={() => setShowModalAnalisisVentas(true)}
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+    >
+      <Eye size={18} />
+      Ver Reporte
+    </button>
+  </div>
+
+</div>
   </div>
 )}
 
@@ -3651,22 +3119,22 @@ const getStockClientesReport = () => {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-black text-white">
-                  <th className="border border-white p-1 text-left">COLOR</th>
-                  <th className="border border-white p-1 text-center">S</th>
-                  <th className="border border-white p-1 text-center">M</th>
-                  <th className="border border-white p-1 text-center">L</th>
-                  <th className="border border-white p-1 text-center">XL</th>
+                  <th className="border border-white p-1 text-left text-base">COLOR</th>
+                  <th className="border border-white p-2 text-center text-base">S</th>
+                  <th className="border border-white p-2 text-center text-base">M</th>
+                  <th className="border border-white p-2 text-center text-base">L</th>
+                  <th className="border border-white p-2 text-center text-base">XL</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(productData.stockByColor).map(([color, tallas]) => (
                   <tr key={color}>
-                    <td className="border p-1 text-sm">{color}</td>
+                    <td className="border p-1 text-sm w-24">{color}</td>
                     {['S', 'M', 'L', 'XL'].map(talla => {
                       const cantidad = tallas[talla] || 0;
                       const bgColor = cantidad > 10 ? 'bg-green-100' : cantidad >= 6 ? 'bg-yellow-100' : cantidad > 0 ? 'bg-red-100' : 'bg-gray-50';
                       return (
-                        <td key={talla} className={`border p-1 text-center text-sm ${bgColor}`}>
+                        <td key={talla} className={`border p-1 text-center text-lg ${bgColor}`}>
                           {cantidad}
                         </td>
                       );
@@ -3696,8 +3164,7 @@ const getStockClientesReport = () => {
         </button>
       </div>
       
-      <div className="p-4 space-y-3">
-        <p className="text-sm text-gray-600 italic">Colores disponibles (sin cantidades)</p>
+      <div className="p-0.5 space-y-4">
         
         {getStockClientesReport().map((productData, idx) => (
           <div key={idx} className="border rounded-lg p-3">
@@ -3914,7 +3381,7 @@ const getStockClientesReport = () => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">
+              <h2 className="text-3xl font-bold">
                 {editingProduct ? 'Editar Producto' : 'Agregar Producto'}
               </h2>
               <button 
@@ -3931,7 +3398,7 @@ const getStockClientesReport = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Modelo *</label>
+                <label className="block text-2xl font-bold mb-1">Modelo *</label>
                 <input
                   type="text"
                   value={editingProduct ? editingProduct.modelo : newProduct.modelo}
@@ -3939,14 +3406,14 @@ const getStockClientesReport = () => {
                     ? setEditingProduct({...editingProduct, modelo: e.target.value})
                     : setNewProduct({...newProduct, modelo: e.target.value})
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
                   placeholder="Ej: Jogger Casual"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Precio Venta *</label>
+                  <label className="block text-2xl font-bold mb-1">Precio Venta *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -3955,12 +3422,12 @@ const getStockClientesReport = () => {
                       ? setEditingProduct({...editingProduct, precio_venta: e.target.value})
                       : setNewProduct({...newProduct, precioVenta: e.target.value})
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
                     placeholder="25.00"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Precio Compra</label>
+                  <label className="block text-2xl font-bold mb-1">Precio Compra</label>
                   <input
                     type="number"
                     step="0.01"
@@ -3969,14 +3436,14 @@ const getStockClientesReport = () => {
                       ? setEditingProduct({...editingProduct, precio_compra: e.target.value})
                       : setNewProduct({...newProduct, precioCompra: e.target.value})
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
                     placeholder="15.00"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">URL de Imagen</label>
+                <label className="block text-2xl font-bold mb-1">URL de Imagen</label>
                 <input
                   type="text"
                   value={editingProduct ? editingProduct.imagen : newProduct.imagen}
@@ -3984,13 +3451,13 @@ const getStockClientesReport = () => {
                     ? setEditingProduct({...editingProduct, imagen: e.target.value})
                     : setNewProduct({...newProduct, imagen: e.target.value})
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-xl"
                   placeholder="https://..."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Colores Disponibles</label>
+                <label className="block text-2xl font-bold mb-2">Colores Disponibles</label>
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
@@ -4001,7 +3468,7 @@ const getStockClientesReport = () => {
                         addColorToProduct(editingProduct || newProduct);
                       }
                     }}
-                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
                     placeholder="Ej: Negro, Azul..."
                   />
                   <button
@@ -4013,13 +3480,13 @@ const getStockClientesReport = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(editingProduct ? editingProduct.colors : newProduct.colors).map(color => (
-                    <span key={color} className="bg-gray-100 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                    <span key={color} className="bg-gray-100 px-3 py-1 rounded-full text-2xl flex items-center gap-2">
                       {color}
                       <button
                         onClick={() => removeColorFromProduct(editingProduct || newProduct, color)}
                         className="text-red-600 hover:text-red-800"
                       >
-                        <X size={14} />
+                        <X size={20} />
                       </button>
                     </span>
                   ))}
@@ -4033,13 +3500,13 @@ const getStockClientesReport = () => {
                     setEditingProduct(null);
                     resetNewProduct();
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium"
+                  className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium text-2xl"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={editingProduct ? updateProduct : addProduct}
-                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-2xl"
                 >
                   {editingProduct ? 'Actualizar' : 'Guardar'}
                 </button>
@@ -4054,7 +3521,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Agregar Stock</h2>
+        <h2 className="text-3xl font-bold">Agregar Stock</h2>
         <button 
           onClick={() => {
             setShowAddStock(false);
@@ -4070,17 +3537,17 @@ const getStockClientesReport = () => {
 
         {/* Instrucciones */}
         <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-          <p className="text-sm text-blue-900">
+          <p className="text-xl text-blue-900">
             💡 <strong>Tip:</strong> Escribe números positivos para ingresar (+14) o negativos para corregir (-10)
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Seleccionar Producto</label>
+          <label className="block text-2xl font-bold mb-1">Seleccionar Producto</label>
           <select
             value={stockToAdd.modelo}
             onChange={(e) => setStockToAdd({ ...stockToAdd, modelo: e.target.value, colors: {} })}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
           >
             <option value="">-- Seleccionar --</option>
             {products.filter(p => p.activo !== false).map(p => (
@@ -4094,7 +3561,7 @@ const getStockClientesReport = () => {
           <div className="border-2 rounded-lg p-4 border-gray-200">
             {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
               <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="font-medium mb-2">{color}</p>
+                <p className="text-2xl font-bold mb-2">{color}</p>
                 <div className="grid grid-cols-4 gap-2 md:gap-4">
                   {['S', 'M', 'L', 'XL'].map(talla => {
                     const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
@@ -4102,7 +3569,7 @@ const getStockClientesReport = () => {
                     
                     return (
                       <div key={talla} className="flex flex-col items-center gap-1">
-                        <label className={`text-xs font-medium px-2 py-1 rounded ${
+                        <label className={`text-xl font-medium px-2 py-1 rounded ${
                           stockActual >= 10
                             ? 'bg-green-100 text-green-800'     // Verde: stock alto
                             : stockActual >= 6
@@ -4126,7 +3593,7 @@ const getStockClientesReport = () => {
                             newColors[color][talla] = e.target.value;
                             setStockToAdd({ ...stockToAdd, colors: newColors });
                           }}
-                          className={`w-full px-2 py-2 border rounded text-center text-sm ${
+                          className={`w-full px-2 py-2 border rounded text-center text-3xl ${
                             val !== 0
                               ? val > 0
                                 ? 'font-bold border-2 border-green-600 bg-lime-300 text-black'  // Positivo: verde
@@ -4149,20 +3616,20 @@ const getStockClientesReport = () => {
               setShowAddStock(false);
               setStockToAdd({ modelo: '', colors: {} });
             }}
-            className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium"
+            className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium text-2xl"
           >
             Cancelar
           </button>
           <button
             onClick={addStockToProduct}
             disabled={isProcessing}
-            className={`flex-1 px-4 py-2 text-white rounded-lg font-medium ${
+            className={`flex-1 px-4 py-2 text-white rounded-lg font-medium text-2xl ${
               isProcessing 
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >  
-            {isProcessing ? '⏳ Procesando...' : '📦 Guardar Cambios'}
+            {isProcessing ? '⏳ Procesando...' : '📦 Guardar '}
           </button>
         </div>
       </div>
@@ -4187,7 +3654,7 @@ const getStockClientesReport = () => {
               <span className="text-2xl">✅</span>
             </div>
           )}
-          <h2 className="text-lg font-bold">
+          <h2 className="text-xl font-bold">
             {stockDetailData.esCorreccion ? 'Corrección Guardada' : 'Stock Agregado'}
           </h2>
         </div>
@@ -4201,7 +3668,7 @@ const getStockClientesReport = () => {
 
       {/* Fecha y Modelo */}
       <div className="mb-4 pb-3 border-b">
-        <p className="text-sm text-gray-600">
+        <p className="text-base text-gray-600">
           {stockDetailData.fecha.split('-').reverse().join('/')} - {stockDetailData.modelo}
         </p>
       </div>
@@ -4219,9 +3686,9 @@ const getStockClientesReport = () => {
 
       return (
         <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
-          <p className="text-xs text-gray-500 mb-1">{operacion.hora}</p>
+          <p className="text-base text-gray-500 mb-1">{operacion.hora}</p>
           {Object.entries(grouped).map(([color, items]) => (
-            <div key={color} className="text-sm">
+            <div key={color} className="text-base">
               <span className="font-medium">{color}:</span>{' '}
               {items.map((item, i) => (
                 <span key={i}>
@@ -4244,7 +3711,7 @@ const getStockClientesReport = () => {
       });
 
       return Object.entries(grouped).map(([color, items]) => (
-        <div key={color} className="text-sm">
+        <div key={color} className="text-base">
           <span className="font-medium">{color}:</span>{' '}
           {items.map((item, idx) => (
             <span key={idx}>
@@ -4271,7 +3738,7 @@ const getStockClientesReport = () => {
       {/* Botón Cerrar */}
       <button
         onClick={() => setShowStockDetail(false)}
-        className="w-full mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+        className="w-full mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-lg"
       >
         Cerrar
       </button>
@@ -4420,7 +3887,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
     <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-2 sticky top-0 bg-white z-10 py-1 md:py-3 border-b">
-        <h2 className="text-2xl md:text-xl font-bold">Nueva Venta</h2>
+        <h2 className="text-3xl md:text-xl font-bold">Nueva Venta</h2>
         <button onClick={() => {
           setShowAddSale(false);
           setSelectedProductModel(null);
@@ -4433,7 +3900,7 @@ const getStockClientesReport = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT: Product Selection */}
         <div>
-          <h3 className="hidden md:block font-bold mb-3 text-lg md:text-base">Productos</h3>
+          <h3 className="hidden md:block font-bold mb-3 text-2xl md:text-base">Productos</h3>
           
           {/* Buscador de productos */}
           <div className="mb-3 hidden md:block">
@@ -4510,8 +3977,8 @@ const getStockClientesReport = () => {
               )}
 
               <div className="text-left flex-1">
-                <p className="text-lg md:text-base font-medium">{product.modelo}</p>
-                <p className="text-base md:text-sm text-emerald-600">
+                <p className="text-2xl md:text-base font-medium">{product.modelo}</p>
+                <p className="text-xl md:text-sm text-emerald-600">
                   S/ {product.precio_venta} - Stock: {totalStock}
                 </p>
               </div>
@@ -4564,11 +4031,11 @@ const getStockClientesReport = () => {
                     <table className="w-full text-xs">
                      <thead className="bg-gray-100">
                        <tr>
-                         <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-xs md:text-sm">Color/Talla</th>
-                         <th className="border p-2 text-center font-bold text-base md:text-base">S</th>
-                         <th className="border p-2 text-center font-bold text-base md:text-base">M</th>
-                         <th className="border p-2 text-center font-bold text-base md:text-base">L</th>
-                         <th className="border p-2 text-center font-bold text-base md:text-base">XL</th>
+                         <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-base md:text-sm">Color/Talla</th>
+                         <th className="border p-2 text-center font-bold text-lg md:text-base">S</th>
+                         <th className="border p-2 text-center font-bold text-lg md:text-base">M</th>
+                         <th className="border p-2 text-center font-bold text-lg md:text-base">L</th>
+                         <th className="border p-2 text-center font-bold text-lg md:text-base">XL</th>
                        </tr>
                      </thead>
                       <tbody>
@@ -4578,7 +4045,7 @@ const getStockClientesReport = () => {
                           )
                           .map(color => (
                           <tr key={color} className="hover:bg-gray-50">
-                            <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-base md:text-xs w-20 md:w-auto">{color}</td>
+                            <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-lg md:text-xs w-20 md:w-auto">{color}</td>
                             {['S', 'M', 'L', 'XL'].map(talla => {
                               const stockDisponible = product.stock?.[color]?.[talla] || 0;
                               const key = `${color}-${talla}`;
@@ -4635,9 +4102,9 @@ const getStockClientesReport = () => {
                       setSelectedProductModel(null);
                       setColorQuantities({});
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-base flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-xl flex items-center justify-center gap-2"
                   >
-                    <Plus size={18} />
+                    <Plus size={20} />
                     Agregar Más
                   </button>
                   <button
@@ -4676,7 +4143,7 @@ const getStockClientesReport = () => {
     setSelectedProductModel(null);
   }}
   disabled={!hasQuantity}
-  className={`flex-1 px-4 py-2 rounded-lg font-medium text-base ${
+  className={`flex-1 px-4 py-2 rounded-lg font-medium text-xl ${
     hasQuantity
       ? 'bg-black text-white hover:bg-gray-800'
       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -4692,11 +4159,11 @@ const getStockClientesReport = () => {
 
         {/* RIGHT: Cart & Checkout */}
         <div>
-          <h3 className="font-bold mb-3 text-lg md:text-lg">Resumen de Compra</h3>
+          <h3 className="font-bold mb-3 text-2xl md:text-lg">Resumen de Compra</h3>
 
           {/* Client Selection */}
           <div className="mb-4">
-            <label className="block text-base md:text-xl font-medium mb-1">Cliente *</label>
+            <label className="block text-2xl md:text-xl font-medium mb-1">Cliente *</label>
             <div className="relative">
               <input
                 type="text"
@@ -4707,7 +4174,7 @@ const getStockClientesReport = () => {
                   setShowClientResults(true);
                 }}
                 onFocus={() => setShowClientResults(true)}
-                className="w-full px-3 py-3 border rounded-lg focus:ring-3 focus:ring-black/10 outline-none text-lg"
+                className="w-full px-3 py-3 border rounded-lg focus:ring-3 focus:ring-black/10 outline-none text-xl"
               />
 
               {showClientResults && clientSearch && (
@@ -4723,8 +4190,8 @@ const getStockClientesReport = () => {
                         }}
                         className="w-full px-3 py-2 text-left hover:bg-gray-50"
                       >
-                        <p className="font-medium text-base">{client.nombre}</p>
-                        {client.dni && <p className="text-base text-gray-500">DNI: {client.dni}</p>}
+                        <p className="font-medium text-2xl">{client.nombre}</p>
+                        {client.dni && <p className="text-2xl text-gray-500">DNI: {client.dni}</p>}
                       </button>
                     ))
                   ) : (
@@ -4734,7 +4201,7 @@ const getStockClientesReport = () => {
                         setShowClientResults(false);
                         setNewClient({ ...newClient, nombre: clientSearch });
                       }}
-                      className="w-full px-3 py-3 text-left hover:bg-gray-50 text-blue-600 text-base"
+                      className="w-full px-3 py-3 text-left hover:bg-gray-50 text-blue-600 text-xl"
                     >
                       + Crear nuevo cliente "{clientSearch}"
                     </button>
@@ -4744,30 +4211,30 @@ const getStockClientesReport = () => {
             </div>
 
             {selectedClient && (
-              <div className="mt-2 p-2 bg-emerald-50 rounded-lg text-sm">
+              <div className="mt-2 p-2 bg-emerald-50 rounded-lg text-xl">
                 <p className="font-medium">{selectedClient.nombre}</p>
-                {selectedClient.telefono && <p className="text-xs">Tel: {selectedClient.telefono}</p>}
+                {selectedClient.telefono && <p className="text-base">Tel: {selectedClient.telefono}</p>}
               </div>
             )}
           </div>
 
           {showCreateClient && (
             <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-              <h4 className="font-medium mb-3 text-base">Crear Nuevo Cliente</h4>
+              <h4 className="font-medium mb-3 text-xl">Crear Nuevo Cliente</h4>
               <div className="space-y-2">
                 <input
                   type="text"
                   placeholder="Nombre *"
                   value={newClient.nombre}
                   onChange={(e) => setNewClient({...newClient, nombre: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-base"
+                  className="w-full px-3 py-2 border rounded text-xl"
                 />
                 <input
                   type="text"
                   placeholder="DNI *"
                   value={newClient.dni}
                   onChange={(e) => setNewClient({...newClient, dni: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-base"
+                  className="w-full px-3 py-2 border rounded text-xl"
                   maxLength="8"
                 />
                 <input
@@ -4775,25 +4242,25 @@ const getStockClientesReport = () => {
                   placeholder="Teléfono"
                   value={newClient.telefono}
                   onChange={(e) => setNewClient({...newClient, telefono: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-base"
+                  className="w-full px-3 py-2 border rounded text-xl"
                 />
                 <input
                   type="text"
                   placeholder="Departamento"
                   value={newClient.departamento}
                   onChange={(e) => setNewClient({...newClient, departamento: e.target.value})}
-                  className="w-full px-3 py-2 border rounded text-base"
+                  className="w-full px-3 py-2 border rounded text-xl"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowCreateClient(false)}
-                    className="flex-1 px-3 py-2 bg-gray-200 rounded text-base"
+                    className="flex-1 px-3 py-2 bg-gray-200 rounded text-xl"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={addClient}
-                    className="flex-1 px-3 py-2 bg-black text-white rounded text-base"
+                    className="flex-1 px-3 py-2 bg-black text-white rounded text-xl"
                   >
                     Guardar
                   </button>
@@ -4803,11 +4270,11 @@ const getStockClientesReport = () => {
           )}
 
           <div className="mb-3">
-            <label className="block text-base font-medium mb-1">Medio de Captación</label>
+            <label className="block text-2xl font-medium mb-1">Medio de Captación</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setSalesChannel('LIVE')}
-                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-base md:text-sm ${
+                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-xl md:text-sm ${
                   salesChannel === 'LIVE'
                     ? 'bg-black text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
@@ -4817,7 +4284,7 @@ const getStockClientesReport = () => {
               </button>
               <button
                 onClick={() => setSalesChannel('TIENDA')}
-                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-base md:text-sm ${
+                className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-xl md:text-sm ${
                   salesChannel === 'TIENDA'
                     ? 'bg-black text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
@@ -4829,12 +4296,12 @@ const getStockClientesReport = () => {
           </div>
 
           <div className="mb-3">
-            <label className="block text-base font-medium mb-1">Fecha</label>
+            <label className="block text-2xl font-medium mb-1">Fecha</label>
             <input
               type="date"
               value={saleDate}
               onChange={(e) => setSaleDate(e.target.value)}
-              className="w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-base"
+              className="w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-xl"
             />
           </div>
 
@@ -4848,25 +4315,25 @@ const getStockClientesReport = () => {
     });
 
     return Object.entries(grouped).map(([modelo, items]) => (
-      <div key={modelo} className="border rounded-lg overflow-hidden text-sm">
+      <div key={modelo} className="border rounded-lg overflow-hidden text-xl">
         {/* Header producto */}
         <div className="bg-gray-200 px-3 py-1.5">
-          <p className="font-bold text-xs">{modelo}</p>
+          <p className="font-bold text-2xl">{modelo}</p>
         </div>
         {/* Filas color-talla */}
         {items.map((item) => (
           <div key={item.index} className="flex items-center justify-between px-3 py-1.5 border-t">
             <div className="flex-1">
-              <span className="font-bold text-xs bg-black text-white px-1.5 py-0.5 rounded mr-1">{item.talla}</span>
-              <span className="text-gray-700 text-xs">{item.color} x{item.quantity}</span>
+              <span className="font-bold text-xl bg-black text-white px-1.5 py-0.5 rounded mr-1">{item.talla}</span>
+              <span className="text-gray-700 text-2xl">{item.color} x{item.quantity}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-xs">S/ {(item.precioVenta * item.quantity).toFixed(2)}</span>
+              <span className="font-bold text-2xl">S/ {(item.precioVenta * item.quantity).toFixed(2)}</span>
               <button
                 onClick={() => removeFromCart(item.index)}
-                className="text-red-500 hover:bg-red-50 rounded p-0.5"
+                className="text-red-500 hover:bg-red-50 rounded p-1.5"
               >
-                <X size={14} />
+                <X size={18} />
               </button>
             </div>
           </div>
@@ -4880,8 +4347,8 @@ const getStockClientesReport = () => {
             <>
               <div className="bg-black text-white p-3 rounded-lg mb-3">
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-sm">TOTAL:</span>
-                  <span className="font-bold text-xl">
+                  <span className="font-bold text-xl">TOTAL:</span>
+                  <span className="font-bold text-2xl">
                     S/ {cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}
                   </span>
                 </div>
@@ -4890,7 +4357,7 @@ const getStockClientesReport = () => {
               <button
   onClick={completeSale}
   disabled={isProcessing}
-  className={`w-full px-4 py-4 md:py-3 rounded-lg font-medium text-base md:text-sm text-white ${
+  className={`w-full px-4 py-4 md:py-3 rounded-lg font-medium text-3xl md:text-sm text-white ${
     isProcessing
       ? 'bg-gray-400 cursor-not-allowed'
       : 'bg-emerald-600 hover:bg-emerald-700'
@@ -4901,7 +4368,7 @@ const getStockClientesReport = () => {
             </>
           ) : (
             <div className="text-center py-8 bg-gray-50 rounded-lg border">
-              <p className="text-gray-500 text-sm">Carrito vacío</p>
+              <p className="text-gray-500 text-xl">Carrito vacío</p>
             </div>
           )}
         </div>
@@ -4978,7 +4445,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black/70 backdrop-blur-base flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">Detalle de Venta</h2>
+        <h2 className="text-2xl font-bold">Detalle de Venta</h2>
         <button onClick={() => setViewingSale(null)} className="p-2 hover:bg-gray-100 rounded-lg">
           <X size={20} />
         </button>
@@ -4986,28 +4453,28 @@ const getStockClientesReport = () => {
 
       <div className="space-y-4">
         <div className="bg-gray-50 rounded-lg p-4 border">
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-lg">
             <div>
-              <p className="text-xs text-gray-500 mb-1">Pedido #</p>
+              <p className="text-xl text-gray-600 mb-1">Pedido #</p>
               <p className="font-bold font-mono">{viewingSale.order_number}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">Fecha</p>
+              <p className="text-xl text-gray-600 mb-1">Fecha</p>
               <p className="font-bold">{viewingSale.fecha.split('-').reverse().join('/')}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">Cliente</p>
+              <p className="text-xl text-gray-600 mb-1">Cliente</p>
               <p className="font-bold">{viewingSale.client_name}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">Medio</p>
+              <p className="text-xl text-gray-600 mb-1">Medio</p>
               <p className="font-bold">{viewingSale.sales_channel || 'TIENDA'}</p>
             </div>
           </div>
         </div>
 
         <div>
-  <h3 className="font-bold mb-2 text-sm">Productos</h3>
+  <h3 className="font-bold mb-2 text-2xl">Productos</h3>
   <div className="space-y-3">
     {(() => {
       // Agrupar por modelo y talla
@@ -5023,14 +4490,14 @@ const getStockClientesReport = () => {
         <div key={modelo} className="border rounded-lg overflow-hidden">
           {/* Header del modelo */}
           <div className="bg-gray-100 px-3 py-2">
-            <p className="font-bold text-sm">{modelo}</p>
+            <p className="font-bold text-xl">{modelo}</p>
           </div>
           {/* Filas por talla */}
           {['S', 'M', 'L', 'XL'].filter(t => tallas[t]).map(talla => {
             const colores = tallas[talla];
             const subtotalTalla = colores.reduce((sum, c) => sum + c.subtotal, 0);
             return (
-              <div key={talla} className="flex items-center justify-between px-3 py-2 border-t text-sm">
+              <div key={talla} className="flex items-center justify-between px-3 py-2 border-t text-xl">
                 <div className="flex-1">
                   <span className="font-bold text-xs bg-black text-white px-2 py-0.5 rounded mr-2">{talla}</span>
                   <span className="text-gray-700">
@@ -5054,7 +4521,7 @@ const getStockClientesReport = () => {
 
         <div className="bg-black text-white p-4 rounded-lg">
           <div className="flex justify-between items-center">
-            <span className="font-bold">TOTAL:</span>
+            <span className="font-bold text-2xl">TOTAL:</span>
             <span className="font-bold text-2xl">S/ {viewingSale.total.toFixed(2)}</span>
           </div>
         </div>
@@ -5096,7 +4563,7 @@ const getStockClientesReport = () => {
                   alert('Venta eliminada y stock revertido.');
                 });
               }}
-              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 flex items-center justify-center gap-2 text-sm"
+              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 flex items-center justify-center gap-2 text-lg"
             >
               <Trash2 size={16} />
               Eliminar Venta
@@ -5107,14 +4574,14 @@ const getStockClientesReport = () => {
         <div className="flex gap-2">
           <button
             onClick={() => downloadOrderNote(viewingSale)}
-            className="flex-1 px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-900 flex items-center justify-center gap-2 text-sm"
+            className="flex-1 px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-900 flex items-center justify-center gap-2 text-lg"
           >
             <Download size={16} />
             PDF
           </button>
           <button
             onClick={() => shareOrderViaWhatsApp(viewingSale)}
-            className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 flex items-center justify-center gap-2 text-sm"
+            className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 flex items-center justify-center gap-2 text-lg"
           >
             <Share2 size={16} />
             WhatsApp
