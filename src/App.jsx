@@ -1368,7 +1368,7 @@ const getStockClientesReport = () => {
                   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                 })}
               </p>
-              <p className="text-base text-gray-500">
+              <p className="text-lg text-gray-500">
                 {ventasFiltradas.length} {ventasFiltradas.length === 1 ? 'venta' : 'ventas'} · Total:
                 <span className="font-bold text-emerald-600"> S/ {totalGeneral.toFixed(2)}</span>
               </p>
@@ -1536,13 +1536,13 @@ const getStockClientesReport = () => {
 
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm text-gray-500">Filtrar por:</span>
+        <span className="text-lg text-gray-500">Filtrar por:</span>
         <button onClick={() => setFiltroAnalisis('hoy')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filtroAnalisis === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
           Hoy
         </button>
         <button onClick={() => setFiltroAnalisis('personalizado')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filtroAnalisis === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
           Personalizado
         </button>
       </div>
@@ -1563,10 +1563,10 @@ const getStockClientesReport = () => {
       {/* TABLA 1: Ventas por Medio con fechas */}
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-gray-800 text-white p-3">
-          <span className="font-bold text-sm">📊 VENTAS POR MEDIO</span>
+          <span className="font-bold text-xl">📊 VENTAS POR MEDIO</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-base">
             <thead>
               <tr className="bg-gray-100">
                 <th className="p-3 text-left font-bold border-r">FECHA</th>
@@ -1575,7 +1575,7 @@ const getStockClientesReport = () => {
                 ))}
                 <th className="p-3 text-center font-bold bg-gray-200">TOTAL</th>
               </tr>
-              <tr className="bg-gray-50 text-xs text-gray-500">
+              <tr className="bg-gray-50 text-sm text-gray-500">
                 <th className="p-2 border-r"></th>
                 {medios.map(m => (
                   <React.Fragment key={m}>
@@ -1595,7 +1595,9 @@ const getStockClientesReport = () => {
                     const filaTotal = medios.reduce((s, m) => s + (porFechaMedia[fecha][m]?.cantidad || 0), 0);
                     return (
                       <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="p-3 font-medium whitespace-nowrap border-r">{formatFecha(fecha)}</td>
+                        <td className="p-3 font-medium whitespace-nowrap border-r">
+                          {fecha.split('-').slice(1).reverse().join('/')}
+                        </td>
                         {medios.map(m => {
                           const data = porFechaMedia[fecha][m];
                           return (
@@ -1633,11 +1635,11 @@ const getStockClientesReport = () => {
       {/* TABLA 2: Clientes completos */}
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-gray-800 text-white p-3 flex justify-between items-center">
-          <span className="font-bold text-sm">👥 CLIENTES</span>
+          <span className="font-bold text-xl">👥 CLIENTES</span>
           <span className="text-xs text-gray-400">{clientesOrdenados.length} clientes</span>
         </div>
         <div className="max-h-64 overflow-y-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-base">
             <thead className="sticky top-0">
               <tr className="bg-gray-100">
                 <th className="p-3 text-center font-bold">#</th>
@@ -1667,9 +1669,9 @@ const getStockClientesReport = () => {
       {/* TABLA 3: Por departamento simple */}
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-gray-800 text-white p-3">
-          <span className="font-bold text-sm">📍 POR DEPARTAMENTO</span>
+          <span className="font-bold text-xl">📍 POR DEPARTAMENTO</span>
         </div>
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
             <tr className="bg-gray-100">
               <th className="p-3 text-left font-bold">DEPARTAMENTO</th>
@@ -1690,9 +1692,9 @@ const getStockClientesReport = () => {
                   </tr>
                 ))}
                 <tr className="bg-black text-white">
-                  <td className="p-3 font-bold">TOTAL</td>
-                  <td className="p-3 text-center font-bold">{ventasFiltradas.length}</td>
-                  <td className="p-3 text-center font-bold">
+                  <td className="p-3 font-bold text-xl">TOTAL</td>
+                  <td className="p-3 text-center font-bold text-xl">{ventasFiltradas.length}</td>
+                  <td className="p-3 text-center font-bold text-xl">
                     S/ {ventasFiltradas.reduce((s, v) => s + v.total, 0).toFixed(2)}
                   </td>
                 </tr>
@@ -2970,7 +2972,7 @@ const getStockClientesReport = () => {
 {/* ============================================ */}
 {/* TAB: REPORTES - PANEL SIMPLE */}
 {activeTab === 'reportes' && (
-  <div className="space-y-6">
+  <div className="space-y-4">
     <h2 className="text-2xl font-bold">Reportes y Análisis</h2>
     
     {/* Filtros Compartidos */}
@@ -3020,8 +3022,8 @@ const getStockClientesReport = () => {
   <div className="bg-gradient-to-br from-blue-100 to-white p-6 rounded-xl shadow-sm border">
     <div className="flex items-start justify-between mb-4">
       <div>
-        <h3 className="text-lg font-bold mb-1">Stock General</h3>
-        <p className="text-sm text-gray-600">Vista matricial con semaforización</p>
+        <h3 className="text-2xl font-bold mb-1">Stock General</h3>
+        <p className="text-lg text-gray-600">Vista matricial con semaforización</p>
       </div>
       <FileText className="text-gray-400" size={24} />
     </div>
@@ -3029,7 +3031,7 @@ const getStockClientesReport = () => {
       onClick={() => setShowModalStockGeneral(true)}
       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
     >
-      <Eye size={18} />
+      <Eye size={20} />
       Ver Reporte
     </button>
   </div>
@@ -3038,8 +3040,8 @@ const getStockClientesReport = () => {
   <div className="bg-gradient-to-br from-purple-100 to-white p-6 rounded-xl shadow-sm border">
     <div className="flex items-start justify-between mb-4">
       <div>
-        <h3 className="text-lg font-bold mb-1">Stock para Clientes</h3>
-        <p className="text-sm text-gray-600">Sin cantidades, solo colores</p>
+        <h3 className="text-2xl font-bold mb-1">Stock para Clientes</h3>
+        <p className="text-lg text-gray-600">Sin cantidades, solo colores</p>
       </div>
       <FileText className="text-gray-400" size={24} />
     </div>
@@ -3047,7 +3049,7 @@ const getStockClientesReport = () => {
       onClick={() => setShowModalStockClientes(true)}
       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
     >
-      <Eye size={18} />
+      <Eye size={20} />
       Ver Reporte
     </button>
   </div>
@@ -3056,8 +3058,8 @@ const getStockClientesReport = () => {
   <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
     <div className="flex items-start justify-between mb-4">
       <div>
-        <h3 className="text-lg font-bold mb-1">Reporte de Ventas</h3>
-        <p className="text-sm text-gray-600">Por modelo</p>
+        <h3 className="text-2xl font-bold mb-1">Reporte de Ventas</h3>
+        <p className="text-lg text-gray-600">Por modelo</p>
       </div>
       <FileText className="text-emerald-600" size={24} />
     </div>
@@ -3065,7 +3067,7 @@ const getStockClientesReport = () => {
       onClick={() => setShowModalReporteVentas(true)}
       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
     >
-      <Eye size={18} />
+      <Eye size={20} />
       Ver Reporte
     </button>
   </div>
@@ -3074,8 +3076,8 @@ const getStockClientesReport = () => {
   <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
     <div className="flex items-start justify-between mb-4">
       <div>
-        <h3 className="text-lg font-bold mb-1">Análisis de Ventas</h3>
-        <p className="text-sm text-gray-600">Medio, clientes y departamento</p>
+        <h3 className="text-2xl font-bold mb-1">Análisis de Ventas</h3>
+        <p className="text-lg text-gray-600">Medio, clientes y departamento</p>
       </div>
       <FileText className="text-slate-600" size={24} />
     </div>
@@ -3083,7 +3085,7 @@ const getStockClientesReport = () => {
       onClick={() => setShowModalAnalisisVentas(true)}
       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
     >
-      <Eye size={18} />
+      <Eye size={20} />
       Ver Reporte
     </button>
   </div>
@@ -3097,7 +3099,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-        <h3 className="text-xl font-bold">📦 Stock General</h3>
+        <h3 className="text-2xl font-bold">📦 Stock General</h3>
         <button
           onClick={() => setShowModalStockGeneral(false)}
           className="text-gray-500 hover:text-black"
@@ -3116,10 +3118,10 @@ const getStockClientesReport = () => {
                   sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0)}
               </span>
             </h4>
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-base border-collapse">
               <thead>
                 <tr className="bg-black text-white">
-                  <th className="border border-white p-1 text-left text-base">COLOR</th>
+                  <th className="border border-white p-1 text-center text-base">COLOR</th>
                   <th className="border border-white p-2 text-center text-base">S</th>
                   <th className="border border-white p-2 text-center text-base">M</th>
                   <th className="border border-white p-2 text-center text-base">L</th>
@@ -3154,8 +3156,8 @@ const getStockClientesReport = () => {
 {showModalStockClientes && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-        <h3 className="text-xl font-bold">👥 Stock para Clientes</h3>
+      <div className="sticky top-0 bg-white border-b p-2 flex justify-between items-center">
+        <h3 className="text-2xl font-bold">👥 Stock para Clientes</h3>
         <button
           onClick={() => setShowModalStockClientes(false)}
           className="text-gray-500 hover:text-black"
@@ -3164,20 +3166,20 @@ const getStockClientesReport = () => {
         </button>
       </div>
       
-      <div className="p-0.5 space-y-4">
+      <div className="p-0.5 space-y-2">
         
         {getStockClientesReport().map((productData, idx) => (
           <div key={idx} className="border rounded-lg p-3">
-            <h4 className="font-bold mb-2 text-center bg-black text-white p-2 rounded text-sm">
+            <h4 className="font-bold mb-2 text-center bg-black text-white p-1 rounded text-lg">
               {productData.modelo}
             </h4>
-            <table className="w-full text-xs md:text-sm border-collapse">
+            <table className="w-full text-sm md:text-sm border-collapse">
               <thead>
                 <tr className="bg-black text-white">
-                  <th className="border border-white p-1 text-center text-xs">S</th>
-                  <th className="border border-white p-1 text-center text-xs">M</th>
-                  <th className="border border-white p-1 text-center text-xs">L</th>
-                  <th className="border border-white p-1 text-center text-xs">XL</th>
+                  <th className="border border-white p-1 text-center text-sm">S</th>
+                  <th className="border border-white p-1 text-center text-sm">M</th>
+                  <th className="border border-white p-1 text-center text-sm">L</th>
+                  <th className="border border-white p-1 text-center text-sm">XL</th>
                 </tr>
               </thead>
               <tbody>
@@ -3201,7 +3203,7 @@ const getStockClientesReport = () => {
                                 ) : (
                                   <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
                                 )}
-                                <span className="text-xs break-words">{color}</span>
+                                <span className="text-sm break-words">{color}</span>
                               </div>
                             );
                           })}
@@ -3233,7 +3235,7 @@ const getStockClientesReport = () => {
             <h3 className="text-2xl font-bold">📊 Reporte de Ventas</h3>
             <button onClick={() => setShowModalReporteVentas(false)}><X size={24} /></button>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-2">
             <p className="text-base text-gray-500">Ventas por Fecha · Haz clic en una fecha para ver el detalle</p>
             {Object.entries(
               sales.reduce((acc, sale) => {
@@ -3246,22 +3248,22 @@ const getStockClientesReport = () => {
               .sort((a, b) => b[0].localeCompare(a[0]))
               .map(([fecha, data]) => (
                 <button key={fecha}
-                  onClick={() => { setFechaSeleccionadaVentas(fecha); setVistaReporteVentas('detalle'); }}
-                  className="w-full text-left border rounded-lg p-4 hover:bg-gray-50 flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-medium">
-                      📅 {new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                      })}
-                    </p>
-                    <p className="text-sm text-gray-500">{data.ventas} {data.ventas === 1 ? 'venta' : 'ventas'}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-emerald-600">S/ {data.total.toFixed(2)}</span>
-                    <span className="text-gray-400">›</span>
-                  </div>
-                </button>
+  onClick={() => { setFechaSeleccionadaVentas(fecha); setVistaReporteVentas('detalle'); }}
+  className="w-full text-left border rounded-lg p-4 hover:bg-gray-50 flex items-center gap-2 text-xl"
+>
+  <div className="flex-1">
+    <p className="font-medium">
+      {new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      })}
+    </p>
+    <div className="flex items-center justify-between mt-1">
+      <p className="text-base text-gray-500">{data.ventas} {data.ventas === 1 ? 'venta' : 'ventas'}</p>
+      <span className="font-bold text-emerald-600 whitespace-nowrap text-xl">S/ {data.total.toFixed(2)}</span>
+    </div>
+  </div>
+  <span className="text-gray-700 text-5xl font-bold flex-shrink-0">›</span>
+</button>
               ))}
           </div>
         </>
@@ -3287,7 +3289,7 @@ const getStockClientesReport = () => {
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-        <h3 className="text-xl font-bold">📈 Análisis de Ventas</h3>
+        <h3 className="text-2xl font-bold">📈 Análisis de Ventas</h3>
         <button onClick={() => setShowModalAnalisisVentas(false)}><X size={24} /></button>
       </div>
       <AnalisisVentas
@@ -3547,7 +3549,7 @@ const getStockClientesReport = () => {
           <select
             value={stockToAdd.modelo}
             onChange={(e) => setStockToAdd({ ...stockToAdd, modelo: e.target.value, colors: {} })}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
+            className="w-full px-2 py-1 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
           >
             <option value="">-- Seleccionar --</option>
             {products.filter(p => p.activo !== false).map(p => (
@@ -3560,7 +3562,7 @@ const getStockClientesReport = () => {
         {stockToAdd.modelo && (
           <div className="border-2 rounded-lg p-4 border-gray-200">
             {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
-              <div key={color} className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div key={color} className="mb-4 p-0.5 bg-gray-50 rounded-lg">
                 <p className="text-2xl font-bold mb-2">{color}</p>
                 <div className="grid grid-cols-4 gap-2 md:gap-4">
                   {['S', 'M', 'L', 'XL'].map(talla => {
@@ -3569,7 +3571,7 @@ const getStockClientesReport = () => {
                     
                     return (
                       <div key={talla} className="flex flex-col items-center gap-1">
-                        <label className={`text-xl font-medium px-2 py-1 rounded ${
+                        <label className={`text-lg font-medium px-2 py-1 rounded ${
                           stockActual >= 10
                             ? 'bg-green-100 text-green-800'     // Verde: stock alto
                             : stockActual >= 6
