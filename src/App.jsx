@@ -1768,7 +1768,7 @@ const getStockClientesReport = () => {
         md:block bg-white border-b sticky top-18 z-30 shadow-sm
       `}>
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2 text-2xl">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2 text-xl">
             {[
               { id: 'dashboard', icon: Home, label: 'Dashboard' },
               { id: 'productos', icon: Package, label: 'Productos' },
