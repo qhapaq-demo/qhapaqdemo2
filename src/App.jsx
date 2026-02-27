@@ -1824,7 +1824,12 @@ const getStockClientesReport = () => {
       : sales.filter(s => s.fecha >= rangoPersonalizado.start && s.fecha <= rangoPersonalizado.end);
 
     const totalGeneral = ventasFiltradas.reduce((sum, s) => sum + s.total, 0);
-    const modelosActivos = products.filter(p => p.activo !== false).map(p => p.modelo);
+    const modelosActivos = products
+      .filter(p => p.activo !== false)
+      .map(p => p.modelo)
+      .filter(modelo => ventasFiltradas.some(sale => 
+        sale.items.some(item => item.modelo === modelo)
+    ));
     const fechasEnRango = [...new Set(ventasFiltradas.map(s => s.fecha))].sort((a, b) => b.localeCompare(a));
 
     const ventasPorFechaModelo = {};
@@ -1834,7 +1839,7 @@ const getStockClientesReport = () => {
         ventasPorFechaModelo[sale.fecha][item.modelo] =
           (ventasPorFechaModelo[sale.fecha][item.modelo] || 0) + item.quantity;
       });
-    });
+   });
 
     const totalPorModelo = {};
     modelosActivos.forEach(m => { totalPorModelo[m] = 0; });
@@ -1850,22 +1855,22 @@ const getStockClientesReport = () => {
     return (
       <>
         <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-          <button onClick={onVolver} className="flex items-center gap-1 text-gray-600 hover:text-black font-medium">
+          <button onClick={onVolver} className="flex items-center gap-1 text-gray-600 hover:text-black font-bold text-2xl">
             ‹ Volver a fechas
           </button>
-          <h3 className="text-lg font-bold">Reporte de Ventas</h3>
+
           <button onClick={onCerrar}><X size={24} /></button>
         </div>
 
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-start">
             <div>
-              <p className="font-bold text-lg capitalize">
+              <p className="font-bold text-xl capitalize">
                 {new Date(fechaSeleccionada + 'T12:00:00').toLocaleDateString('es-PE', {
                   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                 })}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-base text-gray-500">
                 {ventasFiltradas.length} {ventasFiltradas.length === 1 ? 'venta' : 'ventas'} · Total:
                 <span className="font-bold text-emerald-600"> S/ {totalGeneral.toFixed(2)}</span>
               </p>
@@ -1879,19 +1884,19 @@ const getStockClientesReport = () => {
           </div>
 
           <div className="border rounded-lg overflow-hidden">
-            <div className="bg-gray-800 text-white p-3 flex items-center justify-between">
-              <span className="font-bold text-sm">📊 VENTAS POR MODELO</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-gray-300">Filtrar por:</span>
+            <div className="bg-gray-800 text-white p-3">
+              <span className="font-bold text-2xl">📊 VENTAS POR MODELO</span>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-gray-300 text-lg">Filtrar por:</span>
                 <button
                   onClick={() => setFiltroDetalle('dia')}
-                  className={`px-2 py-1 rounded ${filtroDetalle === 'dia' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
+                  className={`px-3 py-1.5 rounded text-lg font-medium ${filtroDetalle === 'dia' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
                 >
                   Hoy
                 </button>
                 <button
                   onClick={() => setFiltroDetalle('personalizado')}
-                  className={`px-2 py-1 rounded ${filtroDetalle === 'personalizado' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
+                  className={`px-3 py-1.5 rounded text-lg font-medium ${filtroDetalle === 'personalizado' ? 'bg-white text-black' : 'bg-gray-600 text-white'}`}
                 >
                   Personalizado
                 </button>
@@ -1899,30 +1904,29 @@ const getStockClientesReport = () => {
             </div>
 
             {filtroDetalle === 'personalizado' && (
-              <div className="bg-gray-50 p-3 flex gap-3 items-center text-sm border-b flex-wrap">
+              <div className="bg-gray-50 p-3 flex gap-3 items-center text-xl border-b flex-wrap">
                 <span className="text-gray-600">Desde:</span>
                 <input type="date" value={rangoPersonalizado.start}
                   onChange={e => setRangoPersonalizado(r => ({ ...r, start: e.target.value }))}
-                  className="border rounded px-2 py-1 text-sm" />
+                  className="border rounded px-2 py-1 text-xl" />
                 <span className="text-gray-600">Hasta:</span>
                 <input type="date" value={rangoPersonalizado.end}
                   onChange={e => setRangoPersonalizado(r => ({ ...r, end: e.target.value }))}
-                  className="border rounded px-2 py-1 text-sm" />
+                  className="border rounded px-2 py-1 text-xl" />
               </div>
             )}
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-2xl">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th className="p-3 text-left border-r font-bold">FECHA</th>
+                    <th className="p-2 text-left border-r font-bold">FECHA</th>
                     {modelosOrdenados.map(m => (
                       // DESPUÉS
                       <th key={m} className="p-3 text-center font-bold">
                         {abreviarNombreProducto(m)}
                       </th>
                     ))}
-                    <th className="p-3 text-center font-bold bg-gray-200">TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1939,9 +1943,9 @@ const getStockClientesReport = () => {
                           sum + (ventasPorFechaModelo[fecha]?.[m] || 0), 0);
                         return (
                           <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="p-3 border-r font-medium whitespace-nowrap">
+                            <td className="p-2 border-r font-medium whitespace-nowrap w-16">
                               {new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', {
-                                weekday: 'short', day: '2-digit', month: '2-digit'
+                                day: '2-digit', month: '2-digit'
                               })}
                             </td>
                             {modelosOrdenados.map(m => {
@@ -1952,7 +1956,6 @@ const getStockClientesReport = () => {
                                 </td>
                               );
                             })}
-                            <td className="p-3 text-center font-bold bg-gray-100">{filaTotal}</td>
                           </tr>
                         );
                       })}
@@ -1961,9 +1964,6 @@ const getStockClientesReport = () => {
                         {modelosOrdenados.map(m => (
                           <td key={m} className="p-3 text-center font-bold">{totalPorModelo[m] || 0}</td>
                         ))}
-                        <td className="p-3 text-center font-bold">
-                          {modelosOrdenados.reduce((sum, m) => sum + (totalPorModelo[m] || 0), 0)}
-                        </td>
                       </tr>
                     </>
                   )}
@@ -3763,11 +3763,11 @@ const getStockClientesReport = () => {
       {vistaReporteVentas === 'lista' && (
         <>
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-            <h3 className="text-xl font-bold">📊 Reporte de Ventas</h3>
+            <h3 className="text-2xl font-bold">📊 Reporte de Ventas</h3>
             <button onClick={() => setShowModalReporteVentas(false)}><X size={24} /></button>
           </div>
           <div className="p-4 space-y-3">
-            <p className="text-sm text-gray-500">Ventas por Fecha · Haz clic en una fecha para ver el detalle</p>
+            <p className="text-base text-gray-500">Ventas por Fecha · Haz clic en una fecha para ver el detalle</p>
             {Object.entries(
               sales.reduce((acc, sale) => {
                 if (!acc[sale.fecha]) acc[sale.fecha] = { ventas: 0, total: 0 };
