@@ -2197,7 +2197,7 @@ const getStockClientesReport = () => {
 
         {/* Stock y colores */}
         <div className="space-y-3 text-base">
-          <div className="flex items-center justify-between text-xl">
+          <div className="flex items-center justify-between text-lg">
             <span className="text-gray-700">Stock Total:</span>
             <span className={`font-bold ${totalStock < 14 ? 'text-orange-600' : 'text-emerald-600'}`}>
               {totalStock} unidades
@@ -2206,10 +2206,10 @@ const getStockClientesReport = () => {
 
           {product.colors && product.colors.length > 0 && (
             <div>
-              <p className="text-xl font-bold mb-1">Colores:</p>
+              <p className="text-lg font-bold mb-1">Colores:</p>
               <div className="flex flex-wrap gap-1">
                 {product.colors.map(color => (
-                  <span key={color} className="text-xl bg-gray-100 px-2 py-0.5 rounded">
+                  <span key={color} className="text-base bg-gray-100 px-2 py-0.5 rounded">
                     {color}
                   </span>
                 ))}
