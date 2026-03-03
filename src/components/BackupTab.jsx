@@ -161,13 +161,7 @@ const BackupTab = ({ supabase }) => {
 
   return (
     <div className="space-y-6">
-      <button
-        onClick={() => window.history.back()}
-        className="md:hidden flex items-center gap-2 text-gray-600 hover:text-black font-medium"
-      >
-        ← Volver al Dashboard
-      </button>
-
+      
       <div className="bg-white p-8 rounded-xl shadow-sm border">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
