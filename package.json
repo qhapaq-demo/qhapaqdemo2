@@ -4,12 +4,14 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
+    "cloudinary-react": "^1.8.1",
     "firebase": "^10.8.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "dev": "vite",
