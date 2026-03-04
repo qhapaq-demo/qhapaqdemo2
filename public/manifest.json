@@ -1,7 +1,7 @@
 {
-  "name": "Abermud Inventario",
-  "short_name": "Abermud",
-  "description": "Sistema de inventario Abermud",
+  "name": "ABermud Inventario",
+  "short_name": "ABermud",
+  "description": "Sistema de inventario ABermud",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -9,7 +9,7 @@
   "icons": [
     {
       "src": "/logo_Abermud.png",
-      "sizes": "192x192",
+      "sizes": "200x200",
       "type": "image/png"
     },
     {
