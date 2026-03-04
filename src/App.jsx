@@ -22,6 +22,8 @@ import ConfiguracionTab from "./components/ConfiguracionTab";
 import BackupTab from "./components/BackupTab";
 import { Routes, Route } from 'react-router-dom';
 import CatalogoProducto from './pages/CatalogoProducto';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 function App() {
   // Estados principales
@@ -994,10 +996,12 @@ const downloadOrderNote = (sale) => {
     `S/ ${item.subtotal.toFixed(2)}`
   ]);
 
-  doc.autoTable({
-    startY: currentY + 5,
-    head: [['Modelo', 'Cant.', 'P. Unit.', 'Subtotal']],
-    body: [...tableData, totalRow],
+  const totalRow = ['', '', 'TOTAL:', `S/ ${sale.total.toFixed(2)}`];
+
+doc.autoTable({
+  startY: currentY + 5,
+  head: [['Modelo', 'Cant.', 'P. Unit.', 'Subtotal']],
+  body: [...tableData, totalRow],
     footStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
     theme: 'grid',
     headStyles: { 
