@@ -3122,44 +3122,62 @@ const getStockClientesReport = () => {
       </div>
       
       <div className="p-4 space-y-3">
-        {getStockGeneralReport().map((productData, idx) => (
-          <div key={idx} className="border rounded-lg p-4">
-            <h4 className="font-bold mb-3 bg-black text-white p-2 rounded flex justify-between items-center">
-              <span>{productData.modelo}</span>
-              <span className="text-emerald-400">
-                {Object.values(productData.stockByColor).reduce((sum, tallas) => 
-                  sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0)}
-              </span>
-            </h4>
-            <table className="w-full text-base border-collapse">
-              <thead>
-                <tr className="bg-black text-white">
-                  <th className="border border-white p-1 text-center text-base">COLOR</th>
-                  <th className="border border-white p-2 text-center text-base">S</th>
-                  <th className="border border-white p-2 text-center text-base">M</th>
-                  <th className="border border-white p-2 text-center text-base">L</th>
-                  <th className="border border-white p-2 text-center text-base">XL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(productData.stockByColor).map(([color, tallas]) => (
-                  <tr key={color}>
-                    <td className="border p-1 text-sm w-24">{color}</td>
-                    {['S', 'M', 'L', 'XL'].map(talla => {
-                      const cantidad = tallas[talla] || 0;
-                      const bgColor = cantidad > 10 ? 'bg-green-100' : cantidad >= 6 ? 'bg-yellow-100' : cantidad > 0 ? 'bg-red-100' : 'bg-gray-50';
-                      return (
-                        <td key={talla} className={`border p-1 text-center text-lg ${bgColor}`}>
-                          {cantidad}
-                        </td>
-                      );
-                    })}
+        {getStockGeneralReport().map((productData, idx) => {
+          // Calcular totales por talla
+          const totalesPorTalla = ['S', 'M', 'L', 'XL'].map(talla =>
+            Object.values(productData.stockByColor).reduce((sum, tallas) => sum + (tallas[talla] || 0), 0)
+          );
+
+          return (
+            <div key={idx} className="border rounded-lg p-4">
+              <h4 className="font-bold mb-3 bg-black text-white p-2 rounded flex justify-between items-center">
+                <span>{productData.modelo}</span>
+                <span className="text-emerald-400">
+                  {Object.values(productData.stockByColor).reduce((sum, tallas) => 
+                    sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0)}
+                </span>
+              </h4>
+              <table className="w-full text-base border-collapse">
+                <thead>
+                  <tr className="bg-black text-white">
+                    <th className="border border-white p-1 text-center text-base">COLOR</th>
+                    <th className="border border-white p-2 text-center text-base">S</th>
+                    <th className="border border-white p-2 text-center text-base">M</th>
+                    <th className="border border-white p-2 text-center text-base">L</th>
+                    <th className="border border-white p-2 text-center text-base">XL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                </thead>
+                <tbody>
+                  {Object.entries(productData.stockByColor).map(([color, tallas]) => (
+                    <tr key={color}>
+                      <td className="border p-1 text-sm w-24">{color}</td>
+                      {['S', 'M', 'L', 'XL'].map(talla => {
+                        const cantidad = tallas[talla] || 0;
+                        const bgColor = cantidad > 10 ? 'bg-green-100' : cantidad >= 6 ? 'bg-yellow-100' : cantidad > 0 ? 'bg-red-100' : 'bg-gray-50';
+                        return (
+                          <td key={talla} className={`border p-1 text-center text-lg ${bgColor}`}>
+                            {cantidad}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+                {/* ✅ FILA TOTAL POR TALLA */}
+                <tfoot>
+                  <tr className="bg-gray-800 text-white font-bold">
+                    <td className="border border-gray-600 p-1 text-sm text-center">TOTAL</td>
+                    {totalesPorTalla.map((total, i) => (
+                      <td key={i} className="border border-gray-600 p-1 text-center text-lg">
+                        {total}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </div>
   </div>
