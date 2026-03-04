@@ -20,6 +20,8 @@ import logoABermud from './logo_Abermud.jpg';
 import UploadFoto from "./components/UploadFoto";
 import ConfiguracionTab from "./components/ConfiguracionTab";
 import BackupTab from "./components/BackupTab";
+import { Routes, Route } from 'react-router-dom';
+import CatalogoProducto from './pages/CatalogoProducto';
 
 function App() {
   // Estados principales
@@ -89,6 +91,9 @@ function App() {
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [saleDate, setSaleDate] = useState('');
   const [salesChannel, setSalesChannel] = useState('TIENDA');
+  const removeFromCart = (index) => {
+  setCart(prev => prev.filter((_, i) => i !== index));
+};
 
   // Estados para selección de productos en ventas
   const [selectedProductModel, setSelectedProductModel] = useState(null);
@@ -3171,12 +3176,38 @@ const getStockClientesReport = () => {
       </div>
       
       <div className="p-0.5 space-y-2">
-        
         {getStockClientesReport().map((productData, idx) => (
           <div key={idx} className="border rounded-lg p-3">
-            <h4 className="font-bold mb-2 text-center bg-black text-white p-1 rounded text-lg">
-              {productData.modelo}
-            </h4>
+            <div className="flex items-center justify-between bg-black text-white p-1 rounded mb-2">
+              <h4 className="font-bold text-lg flex-1 text-center">{productData.modelo}</h4>
+              <button
+  onClick={() => {
+    const prod = products.find(p => 
+      p.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === 
+      productData.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    );
+    if (prod) {
+      const url = `${window.location.origin}/catalogo/${prod.id}`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => alert('✅ Link copiado!'));
+      } else {
+        const el = document.createElement('textarea');
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        alert('✅ Link copiado!');
+      }
+    } else {
+      alert('❌ No se encontró: ' + productData.modelo);
+    }
+  }}
+  className="bg-white text-black text-sm font-bold px-2 py-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
+>
+  📋 Copiar Link
+</button>
+            </div>
             <table className="w-full text-sm md:text-sm border-collapse">
               <thead>
                 <tr className="bg-black text-white">
