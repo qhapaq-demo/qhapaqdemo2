@@ -67,14 +67,17 @@ function App() {
 
   // Estados para productos
   const [newProduct, setNewProduct] = useState({
-    modelo: '',
-    precioVenta: '',
-    precioCompra: '',
-    imagen: '',
-    colors: [],
-    stock: {}
-  });
-  const [newColorInput, setNewColorInput] = useState('');
+  modelo: '',
+  precioVenta: '',
+  precioCompra: '',
+  imagen: '',
+  colors: [],
+  tallas: [],
+  imagenes_colores: {},
+  stock: {}
+});
+const [newColorInput, setNewColorInput] = useState('');
+const [newTallaInput, setNewTallaInput] = useState('');
 
   // Estados para clientes
   const [newClient, setNewClient] = useState({
@@ -449,16 +452,19 @@ const addColorToProduct = (productObj) => {
   };
 
   const resetNewProduct = () => {
-    setNewProduct({
-      modelo: '',
-      precioVenta: '',
-      precioCompra: '',
-      imagen: '',
-      colors: [],
-      stock: {}
-    });
-    setNewColorInput('');
-  };
+  setNewProduct({
+    modelo: '',
+    precioVenta: '',
+    precioCompra: '',
+    imagen: '',
+    colors: [],
+    tallas: [],
+    imagenes_colores: {},
+    stock: {}
+  });
+  setNewColorInput('');
+  setNewTallaInput('');
+};
 
   // ============================================
   // FUNCIONES CRUD DE CLIENTES
@@ -689,7 +695,7 @@ for (const [color, tallas] of Object.entries(stockToAdd.colors)) {
 // SEGUNDO: Procesar (ya validado)
 Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
   if (!updatedStock[color]) {
-    updatedStock[color] = { S: 0, M: 0, L: 0, XL: 0 };
+    updatedStock[color] = Object.fromEntries((product.tallas?.length ? product.tallas : ['S','M','L','XL']).map(t => [t, 0]));
   }
 
   Object.entries(tallas).forEach(([talla, cantidad]) => {
@@ -3124,7 +3130,7 @@ const getStockClientesReport = () => {
       <div className="p-4 space-y-3">
         {getStockGeneralReport().map((productData, idx) => {
           // Calcular totales por talla
-          const totalesPorTalla = ['S', 'M', 'L', 'XL'].map(talla =>
+          const totalesPorTalla = (productData.tallas || ['S','M','L','XL']).map(talla =>
             Object.values(productData.stockByColor).reduce((sum, tallas) => sum + (tallas[talla] || 0), 0)
           );
 
@@ -3141,17 +3147,16 @@ const getStockClientesReport = () => {
                 <thead>
                   <tr className="bg-black text-white">
                     <th className="border border-white p-1 text-center text-base">COLOR</th>
-                    <th className="border border-white p-2 text-center text-base">S</th>
-                    <th className="border border-white p-2 text-center text-base">M</th>
-                    <th className="border border-white p-2 text-center text-base">L</th>
-                    <th className="border border-white p-2 text-center text-base">XL</th>
-                  </tr>
+                    {(productData.tallas || ['S','M','L','XL']).map(talla => (
+                      <th key={talla} className="border border-white p-2 text-center text-base">{talla}</th>
+                   ))}
+                 </tr>
                 </thead>
                 <tbody>
                   {Object.entries(productData.stockByColor).map(([color, tallas]) => (
                     <tr key={color}>
                       <td className="border p-1 text-sm w-24">{color}</td>
-                      {['S', 'M', 'L', 'XL'].map(talla => {
+                      {(productData.tallas || ['S','M','L','XL']).map(talla => {
                         const cantidad = tallas[talla] || 0;
                         const bgColor = cantidad > 10 ? 'bg-green-100' : cantidad >= 6 ? 'bg-yellow-100' : cantidad > 0 ? 'bg-red-100' : 'bg-gray-50';
                         return (
@@ -3383,144 +3388,416 @@ const getStockClientesReport = () => {
       {/* ============================================ */}
 
       {/* MODAL: Agregar/Editar Producto */}
-      {(showAddProduct || editingProduct) && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-3xl font-bold">
-                {editingProduct ? 'Editar Producto' : 'Agregar Producto'}
-              </h2>
-              <button 
-                onClick={() => {
-                  setShowAddProduct(false);
-                  setEditingProduct(null);
-                  resetNewProduct();
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X size={20} />
-              </button>
+{(showAddProduct || editingProduct) && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+
+      {/* Header fijo */}
+      <div className="bg-gray-900 px-5 py-4 flex items-center justify-between flex-shrink-0">
+        <div>
+          <h2 className="text-2xl font-bold text-white">
+            {editingProduct ? '✏️ Editar Producto' : '➕ Agregar Producto'}
+          </h2>
+          <p className="text-gray-400 text-xl">
+            {(editingProduct?.modelo || newProduct.modelo) || 'Nuevo producto'}
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowAddProduct(false);
+            setEditingProduct(null);
+            resetNewProduct();
+          }}
+          className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-colors"
+        >
+          <X size={16} color="white" />
+        </button>
+      </div>
+
+      {/* Body scrollable */}
+      <div className="overflow-y-auto flex-1 p-4 space-y-4">
+
+        {/* SECCIÓN: Información básica */}
+        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+            <span className="text-sm">📋</span>
+            <h3 className="text-white font-bold text-2xl tracking-wide">INFORMACIÓN BÁSICA</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="block text-xl font-bold text-gray-600 mb-1">Nombre del Producto *</label>
+              <input
+                type="text"
+                value={editingProduct ? editingProduct.modelo : newProduct.modelo}
+                onChange={(e) => editingProduct
+                  ? setEditingProduct({ ...editingProduct, modelo: e.target.value })
+                  : setNewProduct({ ...newProduct, modelo: e.target.value })
+                }
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                placeholder="Ej: Jean Princesa, Polo Básico, Jogger Casual..."
+              />
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1.5">
+                <span className="text-amber-500 text-2xl mt-0.5">💡</span>
+                <p className="text-base text-amber-800 leading-relaxed">
+                  Si tienes varios modelos del mismo tipo, diferéncialos: <strong>Jean Princesa, Jean Clásico, Jean Casual</strong>
+                </p>
+              </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-2xl font-bold mb-1">Modelo *</label>
-                <input
-                  type="text"
-                  value={editingProduct ? editingProduct.modelo : newProduct.modelo}
-                  onChange={(e) => editingProduct 
-                    ? setEditingProduct({...editingProduct, modelo: e.target.value})
-                    : setNewProduct({...newProduct, modelo: e.target.value})
-                  }
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
-                  placeholder="Ej: Jogger Casual"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-2xl font-bold mb-1">Precio Venta *</label>
+                <label className="block text-xl font-bold text-gray-600 mb-1">Precio Venta *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-2xl font-semibold">S/</span>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="number" step="0.01"
                     value={editingProduct ? editingProduct.precio_venta : newProduct.precioVenta}
                     onChange={(e) => editingProduct
-                      ? setEditingProduct({...editingProduct, precio_venta: e.target.value})
-                      : setNewProduct({...newProduct, precioVenta: e.target.value})
+                      ? setEditingProduct({ ...editingProduct, precio_venta: e.target.value })
+                      : setNewProduct({ ...newProduct, precioVenta: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
-                    placeholder="25.00"
+                    className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    placeholder="0.00"
                   />
                 </div>
-                <div>
-                  <label className="block text-2xl font-bold mb-1">Precio Compra</label>
+              </div>
+              <div>
+                <label className="block text-xl font-bold text-gray-600 mb-1">Precio Compra</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-2xl font-semibold">S/</span>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="number" step="0.01"
                     value={editingProduct ? editingProduct.precio_compra : newProduct.precioCompra}
                     onChange={(e) => editingProduct
-                      ? setEditingProduct({...editingProduct, precio_compra: e.target.value})
-                      : setNewProduct({...newProduct, precioCompra: e.target.value})
+                      ? setEditingProduct({ ...editingProduct, precio_compra: e.target.value })
+                      : setNewProduct({ ...newProduct, precioCompra: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
-                    placeholder="15.00"
+                    className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-2xl font-bold mb-1">URL de Imagen</label>
-                <input
-                  type="text"
-                  value={editingProduct ? editingProduct.imagen : newProduct.imagen}
-                  onChange={(e) => editingProduct
-                    ? setEditingProduct({...editingProduct, imagen: e.target.value})
-                    : setNewProduct({...newProduct, imagen: e.target.value})
+            {/* Ganancia automática */}
+            {(() => {
+              const pv = parseFloat(editingProduct ? editingProduct.precio_venta : newProduct.precioVenta) || 0;
+              const pc = parseFloat(editingProduct ? editingProduct.precio_compra : newProduct.precioCompra) || 0;
+              if (pv > 0 && pc > 0) return (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 flex justify-between items-center">
+                  <span className="text-base text-emerald-700 font-medium">Ganancia por unidad</span>
+                  <span className="text-base font-bold text-emerald-700">S/ {(pv - pc).toFixed(2)}</span>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* SECCIÓN: Tallas */}
+        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+            <span className="text-sm">📏</span>
+            <h3 className="text-white font-bold text-2xl tracking-wide">TALLAS</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span className="text-amber-500 text-2xl mt-0.5">💡</span>
+              <p className="text-base text-amber-800 leading-relaxed">
+                Escribe cada talla y presiona Enter. Se ordenan solos.<br/>
+                Adulto: <strong>S M L XL XXL</strong> · Jean: <strong>28 30 32 34 36 38</strong> · Niños: <strong>2 4 6 8 10 12 14 16</strong> · Especial: <strong>ST</strong> (standard) · <strong>UNICO</strong> (medias, gorros)
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTallaInput}
+                onChange={(e) => setNewTallaInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const raw = newTallaInput.trim();
+                    if (!raw) return;
+                    const t = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+                    const norm = /^(STANDARD|STANDAR|ESTANDAR|ST|STD)$/.test(t) ? 'ST'
+                      : /^(UNICO|UNICA|UN|U)$/.test(t) ? 'UNICO'
+                      : /^(TALLA\s*)(\d+)$/.test(t) ? t.replace(/^TALLA\s*/, 'T')
+                      : t;
+                    const current = editingProduct ? (editingProduct.tallas || []) : newProduct.tallas;
+                    if (!current.includes(norm)) {
+                      const updated = [...current, norm].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                      editingProduct
+                        ? setEditingProduct({ ...editingProduct, tallas: updated })
+                        : setNewProduct({ ...newProduct, tallas: updated });
+                    }
+                    setNewTallaInput('');
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-xl"
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-2xl font-bold mb-2">Colores Disponibles</label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={newColorInput}
-                    onChange={(e) => setNewColorInput(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        addColorToProduct(editingProduct || newProduct);
-                      }
-                    }}
-                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
-                    placeholder="Ej: Negro, Azul..."
-                  />
-                  <button
-                    onClick={() => addColorToProduct(editingProduct || newProduct)}
-                    className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
-                  >
-                    <Plus size={20} />
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(editingProduct ? editingProduct.colors : newProduct.colors).map(color => (
-                    <span key={color} className="bg-gray-100 px-3 py-1 rounded-full text-2xl flex items-center gap-2">
-                      {color}
-                      <button
-                        onClick={() => removeColorFromProduct(editingProduct || newProduct, color)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <X size={20} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowAddProduct(false);
-                    setEditingProduct(null);
-                    resetNewProduct();
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium text-2xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={editingProduct ? updateProduct : addProduct}
-                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-2xl"
-                >
-                  {editingProduct ? 'Actualizar' : 'Guardar'}
-                </button>
-              </div>
+                }}
+                className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                placeholder="Ej: S, M, 28, ST, UNICO..."
+              />
+              <button
+                onClick={() => {
+                  const raw = newTallaInput.trim();
+                  if (!raw) return;
+                  const t = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+                  const norm = /^(STANDARD|STANDAR|ESTANDAR|ST|STD)$/.test(t) ? 'ST'
+                    : /^(UNICO|UNICA|UN|U)$/.test(t) ? 'UNICO'
+                    : /^(TALLA\s*)(\d+)$/.test(t) ? t.replace(/^TALLA\s*/, 'T')
+                    : t;
+                  const current = editingProduct ? (editingProduct.tallas || []) : newProduct.tallas;
+                  if (!current.includes(norm)) {
+                    const updated = [...current, norm].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                    editingProduct
+                      ? setEditingProduct({ ...editingProduct, tallas: updated })
+                      : setNewProduct({ ...newProduct, tallas: updated });
+                  }
+                  setNewTallaInput('');
+                }}
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-lg"
+              >+</button>
+            </div>
+            <div className="flex flex-wrap gap-2 min-h-[32px]">
+              {(editingProduct ? (editingProduct.tallas || []) : newProduct.tallas).length === 0
+                ? <p className="text-base text-gray-400 italic">Aún no hay tallas — agrega la primera</p>
+                : (editingProduct ? (editingProduct.tallas || []) : newProduct.tallas).map(t => (
+                  <span key={t} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-900 text-white border border-gray-700">
+                    {t}
+                    <button
+                      onClick={() => {
+                        const current = editingProduct ? (editingProduct.tallas || []) : newProduct.tallas;
+                        const updated = current.filter(x => x !== t);
+                        editingProduct
+                          ? setEditingProduct({ ...editingProduct, tallas: updated })
+                          : setNewProduct({ ...newProduct, tallas: updated });
+                      }}
+                      className="hover:opacity-50 transition-opacity"
+                    ><X size={11} /></button>
+                  </span>
+                ))
+              }
             </div>
           </div>
         </div>
-      )}
+
+        {/* SECCIÓN: Colores */}
+        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+            <span className="text-sm">🎨</span>
+            <h3 className="text-white font-bold text-2xl tracking-wide">COLORES DISPONIBLES</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span className="text-amber-500 text-lg mt-0.5">💡</span>
+              <p className="text-base text-amber-800 leading-relaxed">
+                Escribe sin tilde y presiona Enter. Se ordenan alfabéticamente solos.<br/>
+                Correcto: <strong>Azul Marino, Verde Olivo, Guinda, Gris Jaspe</strong>
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newColorInput}
+                onChange={(e) => setNewColorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addColorToProduct(editingProduct || newProduct);
+                  }
+                }}
+                className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                placeholder="Ej: Negro, Azul Marino, Verde Olivo..."
+              />
+              <button
+                onClick={() => addColorToProduct(editingProduct || newProduct)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-lg"
+              >+</button>
+            </div>
+            <div className="flex flex-wrap gap-2 min-h-[32px]">
+              {(editingProduct ? editingProduct.colors : newProduct.colors).length === 0
+                ? <p className="text-base text-gray-400 italic">Aún no hay colores — agrega el primero</p>
+                : [...(editingProduct ? editingProduct.colors : newProduct.colors)].sort().map(color => (
+                  <span key={color} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xl font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                    {color}
+                    <button
+                      onClick={() => removeColorFromProduct(editingProduct || newProduct, color)}
+                      className="hover:opacity-50 transition-opacity text-red-500"
+                    ><X size={16} /></button>
+                  </span>
+                ))
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* SECCIÓN: Fotos */}
+        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+            <span className="text-sm">📸</span>
+            <h3 className="text-white font-bold text-2xl tracking-wide">FOTOS DEL PRODUCTO</h3>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <span className="text-amber-500 text-lg mt-0.5">💡</span>
+              <p className="text-base text-amber-800 leading-relaxed">
+                Las fotos van directo a la nube — no dependen de nadie. La foto <strong>Principal</strong> aparece en el catálogo.
+              </p>
+            </div>
+
+            {/* Foto principal */}
+            <div>
+              <p className="text-lg font-bold text-gray-600 mb-2">Foto Principal</p>
+              <div className="w-36 mx-auto">
+                <div
+                  className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group hover:border-gray-500 hover:bg-gray-50 transition-all"
+                  onClick={() => document.getElementById('upload-principal').click()}
+                >
+                  {(editingProduct ? editingProduct.imagen : newProduct.imagen) ? (
+                    <>
+                      <img
+                        src={editingProduct ? editingProduct.imagen : newProduct.imagen}
+                        alt="Principal"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-white text-xs font-semibold">Cambiar</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 p-2">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="3"/>
+                        <circle cx="8.5" cy="8.5" r="1.5" fill="#d1d5db" stroke="none"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                      </svg>
+                      <span className="text-lg text-gray-400">Subir foto</span>
+                    </div>
+                  )}
+                </div>
+                <input
+                  id="upload-principal"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const archivo = e.target.files[0];
+                    if (!archivo) return;
+                    const formData = new FormData();
+                    formData.append('file', archivo);
+                    formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+                    formData.append('folder', `qhapaq/abermud/productos`);
+                    const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    editingProduct
+                      ? setEditingProduct({ ...editingProduct, imagen: data.secure_url })
+                      : setNewProduct({ ...newProduct, imagen: data.secure_url });
+                  }}
+                />
+                <p className="text-base text-gray-500 font-semibold text-center mt-1">Principal</p>
+              </div>
+            </div>
+
+            {/* Fotos por color */}
+            {(editingProduct ? editingProduct.colors : newProduct.colors).length > 0 && (
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-lg font-bold text-gray-600 mb-1">
+                  Foto por Color <span className="font-normal text-gray-400">(opcional)</span>
+                </p>
+                <p className="text-base text-gray-400 mb-3">Aparece en el catálogo al seleccionar ese color</p>
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  <span className="text-amber-500 text-xs mt-0.5">💡</span>
+                  <p className="text-base text-amber-800 leading-relaxed">
+                    Fotografía la prenda sobre <strong>fondo blanco</strong> para mejor presentación. Ej: coloca el Jogger Negro sobre una superficie blanca.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[...(editingProduct ? editingProduct.colors : newProduct.colors)].sort().slice(0, 6).map((color) => {
+                    const imgColores = editingProduct ? (editingProduct.imagenes_colores || {}) : (newProduct.imagenes_colores || {});
+                    const preview = imgColores[color];
+                    return (
+                      <div key={color} className="flex flex-col items-center gap-1">
+                        <div
+                          className="w-full aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group hover:border-gray-500 hover:bg-gray-50 transition-all"
+                          onClick={() => document.getElementById(`upload-color-${color}`).click()}
+                        >
+                          {preview ? (
+                            <>
+                              <img src={preview} alt={color} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <span className="text-white text-xl font-semibold">Cambiar</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 p-1">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                                <circle cx="8.5" cy="8.5" r="1.5" fill="#d1d5db" stroke="none"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                              </svg>
+                              <span className="text-lg text-gray-400 text-center leading-tight">Subir</span>
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          id={`upload-color-${color}`}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const archivo = e.target.files[0];
+                            if (!archivo) return;
+                            const formData = new FormData();
+                            formData.append('file', archivo);
+                            formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+                            formData.append('folder', `qhapaq/abermud/productos`);
+                            const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+                            const data = await res.json();
+                            const nuevasImagenes = {
+                              ...(editingProduct ? (editingProduct.imagenes_colores || {}) : (newProduct.imagenes_colores || {})),
+                              [color]: data.secure_url
+                            };
+                            editingProduct
+                              ? setEditingProduct({ ...editingProduct, imagenes_colores: nuevasImagenes })
+                              : setNewProduct({ ...newProduct, imagenes_colores: nuevasImagenes });
+                          }}
+                        />
+                        <span className="text-xl text-gray-500 font-semibold text-center leading-tight">{color}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(editingProduct ? editingProduct.colors : newProduct.colors).length > 6 && (
+                  <p className="text-xs text-gray-400 text-center mt-2 italic">
+                    Mostrando 6 de {(editingProduct ? editingProduct.colors : newProduct.colors).length} colores
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="h-2" />
+      </div>
+
+      {/* Footer fijo */}
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-3 flex-shrink-0 bg-white">
+        <button
+          onClick={() => {
+            setShowAddProduct(false);
+            setEditingProduct(null);
+            resetNewProduct();
+          }}
+          className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold text-xl hover:bg-gray-200 transition-colors"
+        >Cancelar</button>
+        <button
+          onClick={editingProduct ? updateProduct : addProduct}
+          className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl font-semibold text-xl hover:bg-gray-700 transition-colors"
+        >
+          {editingProduct ? 'Actualizar Producto ✓' : 'Guardar Producto ✓'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* MODAL: Agregar Stock - SIMPLIFICADO V2 */}
 {showAddStock && (
@@ -3569,7 +3846,7 @@ const getStockClientesReport = () => {
               <div key={color} className="mb-4 p-0.5 bg-gray-50 rounded-lg">
                 <p className="text-2xl font-bold mb-2">{color}</p>
                 <div className="grid grid-cols-4 gap-2 md:gap-4">
-                  {['S', 'M', 'L', 'XL'].map(talla => {
+                  {(products.find(p => p.modelo === stockToAdd.modelo)?.tallas || ['S','M','L','XL']).map(talla => {
                     const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
                     const stockActual = products.find(p => p.modelo === stockToAdd.modelo)?.stock?.[color]?.[talla] || 0;
                     
@@ -4032,74 +4309,68 @@ const getStockClientesReport = () => {
                 </div>
 
                 {/* Tabla compacta de stock y cantidades */}
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                     <thead className="bg-gray-100">
-                       <tr>
-                         <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-base md:text-sm">Color/Talla</th>
-                         <th className="border p-2 text-center font-bold text-lg md:text-base">S</th>
-                         <th className="border p-2 text-center font-bold text-lg md:text-base">M</th>
-                         <th className="border p-2 text-center font-bold text-lg md:text-base">L</th>
-                         <th className="border p-2 text-center font-bold text-lg md:text-base">XL</th>
-                       </tr>
-                     </thead>
-                      <tbody>
-                        {product.colors && product.colors
-                          .filter(color =>
-                            ['S', 'M', 'L', 'XL'].some(talla => (product.stock?.[color]?.[talla] || 0) > 0)
-                          )
-                          .map(color => (
-                          <tr key={color} className="hover:bg-gray-50">
-                            <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-lg md:text-xs w-20 md:w-auto">{color}</td>
-                            {['S', 'M', 'L', 'XL'].map(talla => {
-                              const stockDisponible = product.stock?.[color]?.[talla] || 0;
-                              const key = `${color}-${talla}`;
-                              return (
-                                <td key={talla} className="border p-2 md:p-2">
-                                  <div className="flex flex-col items-center gap-2 md:gap-1">
-                                    {/* Stock semaforizado */}
-                                    <span className={`text-base md:text-sm font-bold px-3 py-1.5 md:py-0.5 rounded-full ${
-                                      stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
-                                      stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
-                                      stockDisponible > 0   ? 'bg-red-100 text-red-700' :
-                                      'bg-gray-100 text-gray-400'
-                                    }`}>
-                                      {stockDisponible}
-                                    </span>
-                                    {/* Input de cantidad */}
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max={stockDisponible}
-                                      placeholder="0"
-                                      value={colorQuantities[key] || ''}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= stockDisponible)) {
-                                          setColorQuantities({
-                                            ...colorQuantities,
-                                            [key]: value
-                                          });
-                                        }
-                                      }}
-                                      disabled={stockDisponible === 0}
-                                      className={`w-full px-0 py-1 md:py-1 border rounded text-center text-4xl md:text-lg disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                                        colorQuantities[key] && parseInt(colorQuantities[key]) > 0 
-                                          ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
-                                          : ''
-                                         }`}
-                                    />
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+<div className="border rounded-lg overflow-hidden">
+  <div className="overflow-x-auto">
+    <table className="w-full text-xs">
+      <thead className="bg-gray-100">
+        <tr>
+          <th className="border p-2 text-left font-bold sticky left-0 bg-gray-100 text-base md:text-sm">Color/Talla</th>
+          {(product.tallas?.length ? product.tallas : ['S','M','L','XL']).map(talla => (
+            <th key={talla} className="border p-2 text-center font-bold text-lg md:text-base">{talla}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {product.colors && product.colors
+          .filter(color =>
+            (product.tallas?.length ? product.tallas : ['S','M','L','XL']).some(talla => (product.stock?.[color]?.[talla] || 0) > 0)
+          )
+          .map(color => (
+            <tr key={color} className="hover:bg-gray-50">
+              <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-lg md:text-xs w-20 md:w-auto">{color}</td>
+              {(product.tallas?.length ? product.tallas : ['S','M','L','XL']).map(talla => {
+                const stockDisponible = product.stock?.[color]?.[talla] || 0;
+                const key = `${color}-${talla}`;
+                return (
+                  <td key={talla} className="border p-2 md:p-2">
+                    <div className="flex flex-col items-center gap-2 md:gap-1">
+                      <span className={`text-base md:text-sm font-bold px-3 py-1.5 md:py-0.5 rounded-full ${
+                        stockDisponible >= 10 ? 'bg-green-100 text-green-700' :
+                        stockDisponible >= 6  ? 'bg-yellow-100 text-yellow-700' :
+                        stockDisponible > 0   ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-400'
+                      }`}>
+                        {stockDisponible}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={stockDisponible}
+                        placeholder="0"
+                        value={colorQuantities[key] || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= stockDisponible)) {
+                            setColorQuantities({ ...colorQuantities, [key]: value });
+                          }
+                        }}
+                        disabled={stockDisponible === 0}
+                        className={`w-full px-0 py-1 md:py-1 border rounded text-center text-4xl md:text-lg disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                          colorQuantities[key] && parseInt(colorQuantities[key]) > 0
+                            ? 'font-bold border-2 border-green-500 bg-lime-300 text-black'
+                            : ''
+                        }`}
+                      />
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  </div>
+</div>
 
                 {/* Botones de acción */}
                 <div className="flex gap-2">
