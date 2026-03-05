@@ -3840,29 +3840,31 @@ const getStockClientesReport = () => {
         </div>
 
         {/* Input unificado para todas las tallas */}
-        {stockToAdd.modelo && (
-          <div className="border-2 rounded-lg p-4 border-gray-200">
-            {products.find(p => p.modelo === stockToAdd.modelo)?.colors.map(color => (
-              <div key={color} className="mb-4 p-0.5 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold mb-2">{color}</p>
-                <div className="grid grid-cols-4 gap-2 md:gap-4">
-                  {(products.find(p => p.modelo === stockToAdd.modelo)?.tallas || ['S','M','L','XL']).map(talla => {
-                    const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
-                    const stockActual = products.find(p => p.modelo === stockToAdd.modelo)?.stock?.[color]?.[talla] || 0;
-                    
-                    return (
-                      <div key={talla} className="flex flex-col items-center gap-1">
-                        <label className={`text-lg font-medium px-2 py-1 rounded ${
-                          stockActual >= 10
-                            ? 'bg-green-100 text-green-800'     // Verde: stock alto
-                            : stockActual >= 6
-                              ? 'bg-yellow-100 text-yellow-800' // Amarillo: stock medio
-                              : stockActual > 0
-                                ? 'bg-red-100 text-red-800'     // Rojo: stock bajo
-                                : 'bg-gray-100 text-gray-500'   // Gris: sin stock
-                      }`}>
-                        {talla} ({stockActual})
-                      </label>
+{stockToAdd.modelo && (
+  <div className="border-2 rounded-lg p-4 border-gray-200">
+    {(() => {
+      const product = products.find(p => p.modelo === stockToAdd.modelo);
+      const tallas = product?.tallas?.length ? product.tallas : ['S','M','L','XL'];
+      return product?.colors.map(color => (
+        <div key={color} className="mb-4 p-0.5 bg-gray-50 rounded-lg">
+          <p className="text-2xl font-bold mb-2">{color}</p>
+          <div className="grid grid-cols-4 gap-2 md:gap-4">
+            {tallas.map(talla => {
+              const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
+              const stockActual = product?.stock?.[color]?.[talla] || 0;
+              return (
+                <div key={talla} className="flex flex-col items-center gap-1">
+                  <label className={`text-lg font-medium px-2 py-1 rounded ${
+                    stockActual >= 10
+                      ? 'bg-green-100 text-green-800'
+                      : stockActual >= 6
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : stockActual > 0
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {talla} ({stockActual})
+                  </label>
                         
                         {/* Input unificado - acepta positivos y negativos */}
                         <input
@@ -3871,9 +3873,12 @@ const getStockClientesReport = () => {
                           placeholder="0"
                           value={stockToAdd.colors[color]?.[talla] || ''}
                           onChange={(e) => {
+                            const valor = e.target.value;
+                            const cantidadInt = parseInt(valor) || 0;
+                            if (cantidadInt < 0 && (stockActual + cantidadInt) < 0) return;
                             const newColors = { ...stockToAdd.colors };
                             if (!newColors[color]) newColors[color] = {};
-                            newColors[color][talla] = e.target.value;
+                            newColors[color][talla] = valor;
                             setStockToAdd({ ...stockToAdd, colors: newColors });
                           }}
                           className={`w-full px-2 py-2 border rounded text-center text-3xl ${
@@ -3889,9 +3894,10 @@ const getStockClientesReport = () => {
                   })}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ));
+          })()}
+        </div>
+      )}
 
         <div className="flex gap-2">
           <button
