@@ -3839,8 +3839,57 @@ const getStockClientesReport = () => {
           </select>
         </div>
 
+        {/* Botón Liquidar Stock */}
+        {stockToAdd.modelo && (
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                const product = products.find(p => p.modelo === stockToAdd.modelo);
+                if (!product) return;
+                const confirmar = window.confirm(`⚠️ ¿Confirmas liquidar el stock de "${product.modelo}"?\n\nTodas las cantidades quedarán en 0. Esta acción no se puede deshacer.`);
+                if (!confirmar) return;
+                const { fecha, hora } = getPeruDateTime();
+                const stockEnCero = {};
+                const transacciones = [];
+                product.colors.forEach(color => {
+                  stockEnCero[color] = {};
+                  const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
+                  tallas.forEach(talla => {
+                    stockEnCero[color][talla] = 0;
+                    const stockActual = product.stock?.[color]?.[talla] || 0;
+                    if (stockActual > 0) {
+                      transacciones.push({
+                        fecha, hora,
+                        tipo: 'LIQUIDACION',
+                        modelo: product.modelo,
+                        color, talla,
+                        cantidad: -stockActual,
+                        notes: '🔴 Liquidación de stock'
+                      });
+                    }
+                  });
+                });
+                try {
+                  if (transacciones.length > 0) {
+                    await supabase.from('stock_transactions').insert(transacciones);
+                  }
+                  await supabase.from('products').update({ stock: stockEnCero }).eq('id', product.id);
+                  setProducts(products.map(p => p.id === product.id ? { ...p, stock: stockEnCero } : p));
+                  setStockToAdd({ modelo: '', colors: {} });
+                  alert(`✅ Stock de "${product.modelo}" liquidado correctamente.`);
+                } catch (error) {
+                  alert('❌ Error al liquidar: ' + error.message);
+                }
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xl flex items-center gap-2"
+            >
+              🔴 Liquidar Stock
+            </button>
+          </div>
+        )}
+
         {/* Input unificado para todas las tallas */}
-{stockToAdd.modelo && (
+        {stockToAdd.modelo && (
   <div className="border-2 rounded-lg p-4 border-gray-200">
     {(() => {
       const product = products.find(p => p.modelo === stockToAdd.modelo);
@@ -3974,9 +4023,53 @@ const getStockClientesReport = () => {
       });
 
       return (
-        <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
-          <p className="text-base text-gray-500 mb-1">{operacion.hora}</p>
-          {Object.entries(grouped).map(([color, items]) => (
+  <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
+    <div className="flex items-center justify-between mb-1">
+      <p className="text-base text-gray-500">{operacion.hora}</p>
+      <button
+        onClick={async () => {
+          const confirmar = window.confirm(`⚠️ ¿Eliminar la operación de las ${operacion.hora}?\n\nEl stock se ajustará automáticamente.`);
+          if (!confirmar) return;
+          try {
+            const product = products.find(p => p.modelo === stockDetailData.modelo);
+            if (!product) return;
+            const updatedStock = { ...product.stock };
+            operacion.items.forEach(item => {
+              if (updatedStock[item.color]?.[item.talla] !== undefined) {
+                updatedStock[item.color][item.talla] = Math.max(0, (updatedStock[item.color][item.talla] || 0) - item.cantidad);
+              }
+            });
+            await supabase.from('stock_transactions')
+              .delete()
+              .eq('modelo', stockDetailData.modelo)
+              .eq('fecha', stockDetailData.fecha)
+              .eq('hora', operacion.hora);
+            await supabase.from('products')
+              .update({ stock: updatedStock })
+              .eq('id', product.id);
+            setProducts(products.map(p => p.id === product.id ? { ...p, stock: updatedStock } : p));
+            setStockTransactions(prev => prev.filter(t => 
+              !(t.modelo === stockDetailData.modelo && t.fecha === stockDetailData.fecha && t.hora === operacion.hora)
+            ));
+            const newOperaciones = stockDetailData.operaciones.filter((_, i) => i !== idx);
+            const newTotal = newOperaciones.reduce((sum, op) => sum + op.items.reduce((s, i) => s + i.cantidad, 0), 0);
+            if (newOperaciones.length === 0) {
+              setShowStockDetail(false);
+            } else {
+              setStockDetailData({ ...stockDetailData, operaciones: newOperaciones, total: newTotal });
+            }
+            alert('✅ Operación eliminada correctamente.');
+          } catch (error) {
+            alert('❌ Error al eliminar: ' + error.message);
+          }
+        }}
+        className="p-1 hover:bg-red-50 rounded-lg transition-colors text-red-400 hover:text-red-600"
+        title="Eliminar esta operación"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+    {Object.entries(grouped).map(([color, items]) => (
             <div key={color} className="text-base">
               <span className="font-medium">{color}:</span>{' '}
               {items.map((item, i) => (
