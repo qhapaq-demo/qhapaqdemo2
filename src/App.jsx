@@ -4071,7 +4071,7 @@ const getStockClientesReport = () => {
         className="p-1 hover:bg-red-50 rounded-lg transition-colors text-red-400 hover:text-red-600"
         title="Eliminar esta operación"
       >
-        <Trash2 size={16} />
+        <Trash2 size={20} />
       </button>
     </div>
     {Object.entries(grouped).map(([color, items]) => (
