@@ -4028,6 +4028,11 @@ const getStockClientesReport = () => {
       <p className="text-base text-gray-500">{operacion.hora}</p>
       <button
         onClick={async () => {
+          const pin = prompt('Ingresa el PIN de administrador:');
+          if (pin !== '1111') {
+            alert('PIN incorrecto.');
+            return;
+          }
           const confirmar = window.confirm(`⚠️ ¿Eliminar la operación de las ${operacion.hora}?\n\nEl stock se ajustará automáticamente.`);
           if (!confirmar) return;
           try {
