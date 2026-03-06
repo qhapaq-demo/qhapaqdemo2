@@ -110,6 +110,7 @@ const [newTallaInput, setNewTallaInput] = useState('');
     modelo: '',
     colors: {}
   });
+  const [stockFechaManual, setStockFechaManual] = useState('');
 
   // Estados para reportes
   const [reportFilter, setReportFilter] = useState('hoy');
@@ -672,7 +673,8 @@ const addColorToProduct = (productObj) => {
 
   setIsProcessing(true); // ← NUEVO
 
-  const { fecha, hora } = getPeruDateTime();
+  const { fecha: fechaAuto, hora } = getPeruDateTime();
+  const fecha = stockFechaManual || fechaAuto;
   const stockTransactionsToInsert = [];
   const updatedStock = { ...product.stock };
   const esCorreccion = false; // Ya no usamos toggle, detectamos por signo
@@ -3809,6 +3811,7 @@ const getStockClientesReport = () => {
           onClick={() => {
             setShowAddStock(false);
             setStockToAdd({ modelo: '', colors: {} });
+            setStockFechaManual('');
           }}
           className="p-2 hover:bg-gray-100 rounded-lg"
         >
@@ -3824,6 +3827,17 @@ const getStockClientesReport = () => {
             💡 <strong>Tip:</strong> Escribe números positivos para ingresar (+14) o negativos para corregir (-10)
           </p>
         </div>
+
+        {/* FECHA MANUAL - TEMPORAL */}
+<div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
+  <label className="block text-sm font-bold text-yellow-800 mb-1">⚠️ Fecha manual (solo para correcciones)</label>
+  <input
+    type="date"
+    value={stockFechaManual}
+    onChange={(e) => setStockFechaManual(e.target.value)}
+    className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm"
+  />
+</div>
 
         <div>
           <label className="block text-2xl font-bold mb-1">Seleccionar Producto</label>
@@ -3871,11 +3885,14 @@ const getStockClientesReport = () => {
                 });
                 try {
                   if (transacciones.length > 0) {
-                    await supabase.from('stock_transactions').insert(transacciones);
+                    const { error } = await supabase.from('stock_transactions').insert(transacciones);
+                    if (error) throw error;
+                    console.log('✅ Transacciones liquidación:', transacciones);
                   }
                   await supabase.from('products').update({ stock: stockEnCero }).eq('id', product.id);
                   setProducts(products.map(p => p.id === product.id ? { ...p, stock: stockEnCero } : p));
                   setStockToAdd({ modelo: '', colors: {} });
+                  setStockFechaManual('');
                   alert(`✅ Stock de "${product.modelo}" liquidado correctamente.`);
                 } catch (error) {
                   alert('❌ Error al liquidar: ' + error.message);
@@ -3953,6 +3970,7 @@ const getStockClientesReport = () => {
             onClick={() => {
               setShowAddStock(false);
               setStockToAdd({ modelo: '', colors: {} });
+              setStockFechaManual('');
             }}
             className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium text-2xl"
           >
