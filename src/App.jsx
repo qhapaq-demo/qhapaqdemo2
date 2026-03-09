@@ -201,6 +201,13 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   // FUNCIÓN HELPER: Color Swatches
   // ============================================
   const getColorImageUrl = (modelo, colorName) => {
+  // Primero buscar en imagenes_colores del producto
+  const product = products.find(p => p.modelo === modelo);
+  if (product?.imagenes_colores?.[colorName]) {
+    return `${product.imagenes_colores[colorName]}?width=80&height=80&quality=70`;
+  }
+  
+  // Si no, buscar en color_swatches
   const swatch = colorSwatches.find(
     s => s.modelo === modelo && 
     s.color_name.toLowerCase() === colorName.toLowerCase()
@@ -334,16 +341,18 @@ useEffect(() => {
     }
 
     const { data, error } = await supabase
-      .from('products')
-      .insert([{
-        modelo: newProduct.modelo,
-        precio_venta: parseFloat(newProduct.precioVenta),
-        precio_compra: parseFloat(newProduct.precioCompra) || 0,
-        imagen: newProduct.imagen || null,
-        colors: newProduct.colors,
-        stock: newProduct.stock
-      }])
-      .select();
+  .from('products')
+  .insert([{
+    modelo: newProduct.modelo,
+    precio_venta: parseFloat(newProduct.precioVenta),
+    precio_compra: parseFloat(newProduct.precioCompra) || 0,
+    imagen: newProduct.imagen || null,
+    colors: newProduct.colors,
+    tallas: newProduct.tallas || [],
+    imagenes_colores: newProduct.imagenes_colores || {},
+    stock: newProduct.stock
+  }])
+  .select();
 
     if (error) {
       console.error('Error agregando producto:', error);
@@ -358,17 +367,19 @@ useEffect(() => {
     if (!editingProduct) return;
 
     const { error } = await supabase
-      .from('products')
-      .update({
-        modelo: editingProduct.modelo,
-        precio_venta: parseFloat(editingProduct.precio_venta),
-        precio_compra: parseFloat(editingProduct.precio_compra) || 0,
-        imagen: editingProduct.imagen,
-        colors: editingProduct.colors,
-        stock: editingProduct.stock,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', editingProduct.id);
+  .from('products')
+  .update({
+    modelo: editingProduct.modelo,
+    precio_venta: parseFloat(editingProduct.precio_venta),
+    precio_compra: parseFloat(editingProduct.precio_compra) || 0,
+    imagen: editingProduct.imagen,
+    colors: editingProduct.colors,
+    tallas: editingProduct.tallas || [],
+    imagenes_colores: editingProduct.imagenes_colores || {},
+    stock: editingProduct.stock,
+    updated_at: new Date().toISOString()
+  })
+  .eq('id', editingProduct.id);
 
     if (error) {
       console.error('Error actualizando producto:', error);
@@ -413,7 +424,8 @@ const addColorToProduct = (productObj) => {
   const updatedStock = { ...(productObj.stock || {}) };
     
     // Inicializar stock del nuevo color en 0 para todas las tallas
-    updatedStock[newColorInput.trim()] = { S: 0, M: 0, L: 0, XL: 0 };
+    const tallas = productObj.tallas?.length ? productObj.tallas : ['S', 'M', 'L', 'XL'];
+    updatedStock[newColorInput.trim()] = Object.fromEntries(tallas.map(t => [t, 0]));
     
     if (editingProduct) {
       setEditingProduct({
@@ -818,24 +830,34 @@ const getPeruDateTime = () => {
     }
   };
 
-    const getIngresoStockReport = () => {
+   const getIngresoStockReport = () => {
   const { start, end } = getDateRangeForFilter(reportFilter);
-  
-  // Solo filtramos por tipo INGRESO (correcciones también son INGRESO pero con cantidad negativa)
+
+  // Buscar la última liquidación
+  const ultimaLiquidacion = stockTransactions
+    .filter(t => t.tipo === 'LIQUIDACION')
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora))
+    .at(0);
+
+  // Usar la fecha más reciente entre el filtro y la última liquidación
+  const fechaInicio = ultimaLiquidacion && ultimaLiquidacion.fecha > start 
+    ? ultimaLiquidacion.fecha 
+    : start;
+
   const filteredTransactions = stockTransactions.filter(t => 
-    t.tipo === 'INGRESO' &&
-    t.fecha >= start &&
+    (t.tipo === 'INGRESO' || t.tipo === 'LIQUIDACION') &&
+    t.fecha >= fechaInicio &&
     t.fecha <= end
   );
-
 
   const grouped = {};
   filteredTransactions.forEach(t => {
     if (!grouped[t.fecha]) grouped[t.fecha] = {};
-    if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = { ingreso: 0, correccion: 0 };
+    if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = { ingreso: 0, correccion: 0, liquidacion: 0 };
     
-    // Separar por signo de cantidad
-    if (t.cantidad > 0) {
+    if (t.tipo === 'LIQUIDACION') {
+      grouped[t.fecha][t.modelo].liquidacion += t.cantidad;
+    } else if (t.cantidad > 0) {
       grouped[t.fecha][t.modelo].ingreso += t.cantidad;
     } else if (t.cantidad < 0) {
       grouped[t.fecha][t.modelo].correccion += t.cantidad;
@@ -843,7 +865,7 @@ const getPeruDateTime = () => {
   });
 
   return grouped;
-};
+}; 
 
 // Función para obtener detalle de ingresos/correcciones de un día específico
 const getStockDetailByDate = (fecha, modelo) => {
@@ -1150,7 +1172,8 @@ const shareOrderViaWhatsApp = (sale) => {
       
       product.colors?.forEach(color => {
         stockByColor[color] = {};
-        ['S', 'M', 'L', 'XL'].forEach(talla => {
+        const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
+        tallas.forEach(talla => {
           const cantidad = product.stock?.[color]?.[talla] || 0;
           stockByColor[color][talla] = cantidad;
           totalProduct += cantidad;
@@ -1160,10 +1183,11 @@ const shareOrderViaWhatsApp = (sale) => {
       return {
         modelo: product.modelo,
         stockByColor,
-        total: totalProduct
+        total: totalProduct,
+        tallas: product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL']
       };
     })
-    .sort((a, b) => b.total - a.total); // Ordenar de mayor a menor stock
+    .sort((a, b) => b.total - a.total);
 };
 
 const getStockClientesReport = () => {
@@ -1171,7 +1195,8 @@ const getStockClientesReport = () => {
     .filter(product => product.activo !== false)
     .map(product => {
       const colorsByTalla = {};
-      ['S', 'M', 'L', 'XL'].forEach(talla => {
+      const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
+      tallas.forEach(talla => {
         colorsByTalla[talla] = [];
         product.colors?.forEach(color => {
           const cantidad = product.stock?.[color]?.[talla] || 0;
@@ -1183,17 +1208,19 @@ const getStockClientesReport = () => {
 
       // Calcular total para ordenar igual que Stock General
       let totalProduct = 0;
-      product.colors?.forEach(color => {
-        ['S', 'M', 'L', 'XL'].forEach(talla => {
-          totalProduct += product.stock?.[color]?.[talla] || 0;
-        });
-      });
+product.colors?.forEach(color => {
+  const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
+  tallas.forEach(talla => {
+    totalProduct += product.stock?.[color]?.[talla] || 0;
+  });
+});
 
-      return {
-        modelo: product.modelo,
-        colorsByTalla,
-        total: totalProduct
-      };
+return {
+  modelo: product.modelo,
+  colorsByTalla,
+  total: totalProduct,
+  tallas: product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL']
+};
     })
     .filter(p => p.total > 0) // Solo mostrar productos con stock disponible
     .sort((a, b) => b.total - a.total);
@@ -2588,19 +2615,32 @@ const getStockClientesReport = () => {
                     FECHA
                   </th>
                   {(() => {
-                    const stockData = getStockALaFechaReport();
-                    const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
-                      const stockA = stockData[a.modelo] || 0;
-                      const stockB = stockData[b.modelo] || 0;
-                      return stockB - stockA;
-                    });
-                    return sortedProducts.map(p => (
-                      <th key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold min-w-[50px] md:min-w-[100px] text-[9px] md:text-sm">
-                        <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
-                        <span className="hidden md:block">{p.modelo}</span>
-                      </th>
-                    ));
-                  })()}
+  let sortedProducts;
+  if (showStockModal === 'stock_fecha') {
+    const stockData = getStockALaFechaReport();
+    sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+  } else if (showStockModal === 'movimientos') {
+    const ingresoData = getIngresoStockReport();
+    sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+      const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+      const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+      return totalB - totalA;
+    });
+  } else {
+    const salidaData = getSalidaVentasReport();
+    sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+      const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+      const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+      return totalB - totalA;
+    });
+  }
+  return sortedProducts.map(p => (
+    <th key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold min-w-[50px] md:min-w-[100px] text-[9px] md:text-sm">
+      <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
+      <span className="hidden md:block">{p.modelo}</span>
+    </th>
+  ));
+})()}
                 </tr>
               </thead>
               <tbody>
@@ -2689,8 +2729,11 @@ const getStockClientesReport = () => {
     <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
     {(() => {
       const ingresoData = getIngresoStockReport();
-      const stockData = getStockALaFechaReport();
-      const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+      const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+        const totalA = Object.values(ingresoData).reduce((sum, m) => sum + (m[a.modelo]?.ingreso || 0), 0);
+        const totalB = Object.values(ingresoData).reduce((sum, m) => sum + (m[b.modelo]?.ingreso || 0), 0);
+        return totalB - totalA;
+      });
       return sortedProducts.map(p => (
         <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm">
           {Object.values(ingresoData).reduce((sum, m) => 
@@ -2736,8 +2779,11 @@ const getStockClientesReport = () => {
 )}
                 {showStockModal === 'salidas' && (() => {
                   const salidaData = getSalidaVentasReport();
-                  const stockData = getStockALaFechaReport();
-                  const sortedProducts = [...products].sort((a, b) => (stockData[b.modelo] || 0) - (stockData[a.modelo] || 0));
+                  const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
+                    const totalA = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[a.modelo]) || 0), 0);
+                    const totalB = Object.values(salidaData).reduce((sum, m) => sum + (Number(m[b.modelo]) || 0), 0);
+                    return totalB - totalA;
+                  });
                   return Object.keys(salidaData).length > 0 ? (
                     <tr className="bg-gray-200 font-bold">
                       <td className="border border-gray-300 p-1 md:p-2 sticky left-0 bg-gray-200 z-10 text-[10px] md:text-sm">TOTAL</td>
@@ -3206,49 +3252,53 @@ const getStockClientesReport = () => {
       
       <div className="p-0.5 space-y-2">
         {getStockClientesReport().map((productData, idx) => (
-          <div key={idx} className="border rounded-lg p-3">
-            <div className="flex items-center justify-between bg-black text-white p-1 rounded mb-2">
-              <h4 className="font-bold text-lg flex-1 text-center">{productData.modelo}</h4>
+  <div key={idx} className="border rounded-lg overflow-hidden">
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm md:text-sm border-collapse">
+      <thead>
+        <tr className="bg-black text-white">
+          <th colSpan={(productData.tallas?.length ? productData.tallas : ['S', 'M', 'L', 'XL']).length} className="p-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-lg">{productData.modelo}</span>
               <button
-  onClick={() => {
-    const prod = products.find(p => 
-      p.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === 
-      productData.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    );
-    if (prod) {
-      const url = `${window.location.origin}/catalogo/${prod.id}`;
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(() => alert('✅ Link copiado!'));
-      } else {
-        const el = document.createElement('textarea');
-        el.value = url;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-        alert('✅ Link copiado!');
-      }
-    } else {
-      alert('❌ No se encontró: ' + productData.modelo);
-    }
-  }}
-  className="bg-white text-black text-sm font-bold px-2 py-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
->
-  📋 Copiar Link
-</button>
+                onClick={() => {
+                  const prod = products.find(p => 
+                    p.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === 
+                    productData.modelo?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+                  );
+                  if (prod) {
+                    const url = `${window.location.origin}/catalogo/${prod.id}`;
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(url).then(() => alert('✅ Link copiado!'));
+                    } else {
+                      const el = document.createElement('textarea');
+                      el.value = url;
+                      document.body.appendChild(el);
+                      el.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(el);
+                      alert('✅ Link copiado!');
+                    }
+                  } else {
+                    alert('❌ No se encontró: ' + productData.modelo);
+                  }
+                }}
+                className="bg-white text-black text-sm font-bold px-2 py-1 rounded hover:bg-gray-200 transition-colors flex-shrink-0"
+              >
+                📋 Copiar Link
+              </button>
             </div>
-            <table className="w-full text-sm md:text-sm border-collapse">
-              <thead>
-                <tr className="bg-black text-white">
-                  <th className="border border-white p-1 text-center text-sm">S</th>
-                  <th className="border border-white p-1 text-center text-sm">M</th>
-                  <th className="border border-white p-1 text-center text-sm">L</th>
-                  <th className="border border-white p-1 text-center text-sm">XL</th>
-                </tr>
-              </thead>
+          </th>
+        </tr>
+        <tr className="bg-black text-white">
+          {(productData.tallas?.length ? productData.tallas : ['S', 'M', 'L', 'XL']).map(talla => (
+            <th key={talla} className="border border-white p-1 text-center text-sm">{talla}</th>
+          ))}
+        </tr>
+      </thead>
               <tbody>
                 <tr>
-                  {['S', 'M', 'L', 'XL'].map(talla => (
+                  {(productData.tallas?.length ? productData.tallas : ['S', 'M', 'L', 'XL']).map(talla => (
                     <td key={talla} className="border p-2 align-top w-1/4">
                       {productData.colorsByTalla[talla]?.length > 0 ? (
                         <div className="space-y-2">
@@ -3281,6 +3331,7 @@ const getStockClientesReport = () => {
               </tbody>
             </table>
           </div>
+        </div>
         ))}
       </div>
     </div>
@@ -3827,17 +3878,6 @@ const getStockClientesReport = () => {
             💡 <strong>Tip:</strong> Escribe números positivos para ingresar (+14) o negativos para corregir (-10)
           </p>
         </div>
-
-        {/* FECHA MANUAL - TEMPORAL */}
-<div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
-  <label className="block text-sm font-bold text-yellow-800 mb-1">⚠️ Fecha manual (solo para correcciones)</label>
-  <input
-    type="date"
-    value={stockFechaManual}
-    onChange={(e) => setStockFechaManual(e.target.value)}
-    className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm"
-  />
-</div>
 
         <div>
           <label className="block text-2xl font-bold mb-1">Seleccionar Producto</label>
@@ -4892,7 +4932,7 @@ const getStockClientesReport = () => {
             <p className="font-bold text-xl">{modelo}</p>
           </div>
           {/* Filas por talla */}
-          {['S', 'M', 'L', 'XL'].filter(t => tallas[t]).map(talla => {
+          {Object.keys(tallas).filter(t => tallas[t]).map(talla => {
             const colores = tallas[talla];
             const subtotalTalla = colores.reduce((sum, c) => sum + c.subtotal, 0);
             return (

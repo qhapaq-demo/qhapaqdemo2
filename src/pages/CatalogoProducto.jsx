@@ -15,71 +15,40 @@ const CatalogoProducto = () => {
   }, [productId]);
 
   const cargarDatos = async () => {
-    const { data: prod } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', productId)
-      .single();
+  const { data: prod } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', productId)
+    .single();
 
-    // Colores con fotos
-    const { data: colores } = await supabase
-      .from('color_swatches')
-      .select('*')
-      .eq('modelo', prod?.modelo);
+  const { data: configData } = await supabase
+    .from('configuracion')
+    .select('*')
+    .limit(1)
+    .single();
 
-    // Stock por talla
-    const { data: stockData } = await supabase
-      .from('stock_transactions')
-      .select('color, talla, cantidad, tipo')
-      .eq('modelo', prod?.modelo);
-
-    // Calcular stock real
-    const calc = {};
-    (stockData || []).forEach(t => {
-      const key = `${t.color}-${t.talla}`;
-      if (!calc[key]) calc[key] = 0;
-      calc[key] += t.tipo === 'INGRESO' ? t.cantidad : -t.cantidad;
+  // Agrupar colores por talla desde product.stock directamente
+  const tallas = prod?.tallas?.length ? prod.tallas : ['S', 'M', 'L', 'XL'];
+  const porTalla = {};
+  tallas.forEach(talla => {
+    porTalla[talla] = [];
+    (prod?.colors || []).forEach(color => {
+      const cantidad = prod?.stock?.[color]?.[talla] || 0;
+      if (cantidad > 0) {
+        const imageUrl = prod?.imagenes_colores?.[color] || null;
+        porTalla[talla].push({ color, image_url: imageUrl });
+      }
     });
+  });
 
-    // Agrupar colores por talla (solo los que tienen stock > 0)
-    const porTalla = { S: [], M: [], L: [], XL: [] };
-    Object.keys(porTalla).forEach(talla => {
-      // Obtener colores únicos con stock en esta talla
-      const coloresEnTalla = [];
-      const vistos = new Set();
-      (stockData || []).forEach(t => {
-        if (t.talla === talla && !vistos.has(t.color)) {
-          const stockReal = calc[`${t.color}-${t.talla}`] || 0;
-          if (stockReal > 0) {
-            vistos.add(t.color);
-            // Buscar imagen del color
-            const colorInfo = (colores || []).find(c =>
-              c.color_name?.toLowerCase() === t.color?.toLowerCase()
-            );
-            coloresEnTalla.push({
-              color: t.color,
-              image_url: colorInfo?.image_url || null
-            });
-          }
-        }
-      });
-      porTalla[talla] = coloresEnTalla;
-    });
+  setProducto(prod);
+  setStockPorTalla(porTalla);
+  setConfig(configData);
+  setLoading(false);
+};
 
-    const { data: configData } = await supabase
-      .from('configuracion')
-      .select('*')
-      .limit(1)
-      .single();
-
-    setProducto(prod);
-    setStockPorTalla(porTalla);
-    setColoresData(colores || []);
-    setConfig(configData);
-    setLoading(false);
-  };
-
-  const tallas = ['S', 'M', 'L', 'XL'].filter(t => stockPorTalla[t]?.length > 0);
+  const tallas = (producto?.tallas?.length ? producto.tallas : ['S', 'M', 'L', 'XL'])
+  .filter(t => stockPorTalla[t]?.length > 0);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
