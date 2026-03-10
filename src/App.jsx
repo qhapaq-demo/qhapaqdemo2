@@ -57,6 +57,7 @@ function App() {
   const [showSaleConfirm, setShowSaleConfirm] = useState(false);
   const [saleConfirmData, setSaleConfirmData] = useState(null);
   const [ventaPorCobrar, setVentaPorCobrar] = useState('');
+  const [showDeleteProduct, setShowDeleteProduct] = useState(null);
 
   // Estados para modales de reportes
   const [showModalStockGeneral, setShowModalStockGeneral] = useState(false);
@@ -120,11 +121,20 @@ const [newTallaInput, setNewTallaInput] = useState('');
   end: ''
 });
 
-  // Inicializar fechas
+  // Inicializar fechas + botón atrás del celular va al Dashboard
 useEffect(() => {
   const fechaHoy = getPeruDateTime().fecha;
   setSaleDate(fechaHoy);
   setCustomDateRange({ start: fechaHoy, end: fechaHoy });
+
+  // Botón atrás → ir al Dashboard en vez de cerrar la app
+  window.history.pushState(null, '', window.location.href);
+  const handlePopState = () => {
+    window.history.pushState(null, '', window.location.href);
+    setActiveTab('dashboard');
+  };
+  window.addEventListener('popstate', handlePopState);
+  return () => window.removeEventListener('popstate', handlePopState);
 }, []);
 
   // ============================================
@@ -391,8 +401,6 @@ useEffect(() => {
   };
 
   const deleteProduct = async (productId) => {
-  if (!confirm('¿Seguro que deseas eliminar este producto?')) return;
-
   const { error } = await supabase
     .from('products')
     .delete()
@@ -401,6 +409,9 @@ useEffect(() => {
   if (error) {
     console.error('Error eliminando producto:', error);
     alert('Error al eliminar producto');
+  } else {
+    setProducts(products.filter(p => p.id !== productId));
+    setShowDeleteProduct(null);
   }
 };
 
@@ -2261,7 +2272,7 @@ return {
                   <Edit2 size={20} />
                 </button>
                 <button
-                  onClick={() => deleteProduct(product.id)}
+                  onClick={() => setShowDeleteProduct(product)}
                   className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
                   title="Eliminar"
                 >
@@ -5095,6 +5106,37 @@ return {
             WhatsApp
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: Confirmar eliminar producto */}
+{showDeleteProduct && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+      <div className="text-center mb-5">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Trash2 size={28} className="text-red-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">¿Eliminar producto?</h2>
+        <p className="text-gray-500 text-base mt-2">
+          Estás a punto de eliminar <span className="font-semibold text-gray-800">"{showDeleteProduct.modelo}"</span>. Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={() => setShowDeleteProduct(null)}
+          className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-base font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={() => deleteProduct(showDeleteProduct.id)}
+          className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl text-base font-medium hover:bg-red-700 transition-colors"
+        >
+          Sí, eliminar
+        </button>
       </div>
     </div>
   </div>
