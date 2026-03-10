@@ -1773,47 +1773,65 @@ return {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-      <header className="bg-black text-white sticky top-0 z-40 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-5 md:py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo clickeable - vuelve al Dashboard */}
-            <button 
-              onClick={() => setActiveTab('dashboard')}
-              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-            >
-              {/* Logo con imagen MÁS GRANDE */}
-              <img 
-                src={logoABermud} 
-                alt="ABermud Logo" 
-                className="w-16 h-16 md:w-14 md:h-14 rounded-full object-cover"
-              />
-              <div className="text-left">
-                <h1 className="text-3xl md:text-2xl font-bold">ABermud</h1>
-                <p className="text-base md:text-sm text-gray-300 italic">Lo bueno va contigo</p>
-              </div>
-            </button>
-
-            <div className="hidden md:flex items-center gap-2">
-              <div className="text-right mr-4">
-                <p className="text-sm font-medium">Ingresos del día</p>
-                <p className="text-xl font-bold text-emerald-400">
-                  S/ {sales
-                    .filter(s => s.fecha === getPeruDateTime().fecha)
-                    .reduce((sum, s) => sum + s.total, 0)
-                    .toFixed(2)}
-                </p>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 hover:bg-white/10 rounded-lg"
-            >
-              <Menu size={24} />
-            </button>
-          </div>
+<header className="bg-black text-white sticky top-0 z-40 shadow-lg">
+  <div className="max-w-7xl mx-auto px-4 py-5 md:py-4">
+    <div className="flex items-center justify-between">
+      
+      {/* Logo clickeable - vuelve al Dashboard */}
+      <button 
+        onClick={() => setActiveTab('dashboard')}
+        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+      >
+        <img 
+          src={logoABermud} 
+          alt="ABermud Logo" 
+          className="w-16 h-16 md:w-14 md:h-14 rounded-full object-cover"
+        />
+        <div className="text-left">
+          <h1 className="text-3xl md:text-2xl font-bold">ABermud</h1>
+          <p className="text-base md:text-sm text-gray-300 italic">Lo bueno va contigo</p>
         </div>
-      </header>
+      </button>
+
+      {/* Desktop: ingresos + botón salir */}
+      <div className="hidden md:flex items-center gap-4">
+        <div className="text-right">
+          <p className="text-sm font-medium">Ingresos del día</p>
+          <p className="text-xl font-bold text-emerald-400">
+            S/ {sales
+              .filter(s => s.fecha === getPeruDateTime().fecha)
+              .reduce((sum, s) => sum + s.total, 0)
+              .toFixed(2)}
+          </p>
+        </div>
+        <button
+          onClick={async () => {
+            if (!confirm('¿Cerrar sesión?')) return;
+            await supabase.auth.signOut();
+            window.location.href = '/login';
+          }}
+          className="flex items-center gap-2 border border-white/30 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Salir
+        </button>
+      </div>
+
+      {/* Móvil: hamburguesa */}
+      <button 
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className="md:hidden p-2 hover:bg-white/10 rounded-lg"
+      >
+        <Menu size={24} />
+      </button>
+
+    </div>
+  </div>
+</header>
 
       {/* NAVIGATION */}
       <nav className={`
