@@ -56,7 +56,8 @@ function App() {
   const [showStockModal, setShowStockModal] = useState(null);
   const [showSaleConfirm, setShowSaleConfirm] = useState(false);
   const [saleConfirmData, setSaleConfirmData] = useState(null);
-  
+  const [ventaPorCobrar, setVentaPorCobrar] = useState('');
+
   // Estados para modales de reportes
   const [showModalStockGeneral, setShowModalStockGeneral] = useState(false);
   const [showModalStockClientes, setShowModalStockClientes] = useState(false);
@@ -572,7 +573,9 @@ const addColorToProduct = (productObj) => {
     const month = fecha.split('-')[1];
     const day = fecha.split('-')[2];
     const orderNumber = `${year}-${day}${month}-${consecutivo.toString().padStart(3, '0')}`;
-    const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalCalculado = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const total = ventaPorCobrar ? parseFloat(ventaPorCobrar) : totalCalculado;
+    const descuento = totalCalculado - total;
 
     // 1. Crear la venta
     const { data: saleData, error: saleError } = await supabase
@@ -588,7 +591,8 @@ const addColorToProduct = (productObj) => {
         client_department: selectedClient.departamento,
         sales_channel: salesChannel,
         items: cart,
-        total: total
+        total: total,
+        descuento: descuento > 0 ? descuento : 0
       }]).select();
 
     if (saleError) throw new Error('Error al crear la venta: ' + saleError.message);
@@ -648,7 +652,8 @@ const addColorToProduct = (productObj) => {
       cliente: selectedClient.nombre,
       canal: salesChannel,
       items: [...cart],
-      total
+      total,
+      descuento: descuento > 0 ? descuento : 0
     });
 
     // 5. Limpiar
@@ -659,6 +664,7 @@ const addColorToProduct = (productObj) => {
     setSaleDate(getPeruDateTime().fecha);
     setSalesChannel('TIENDA');
     setShowSaleConfirm(true);
+    setVentaPorCobrar('');
 
   } catch (error) {
     console.error(error);
@@ -788,7 +794,7 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
 }
 };
 
-  // ============================================
+ // ============================================
   // FUNCIONES DE REPORTES
   // ============================================
 
@@ -830,23 +836,12 @@ const getPeruDateTime = () => {
     }
   };
 
-   const getIngresoStockReport = () => {
+  const getIngresoStockReport = () => {
   const { start, end } = getDateRangeForFilter(reportFilter);
-
-  // Buscar la última liquidación
-  const ultimaLiquidacion = stockTransactions
-    .filter(t => t.tipo === 'LIQUIDACION')
-    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora))
-    .at(0);
-
-  // Usar la fecha más reciente entre el filtro y la última liquidación
-  const fechaInicio = ultimaLiquidacion && ultimaLiquidacion.fecha > start 
-    ? ultimaLiquidacion.fecha 
-    : start;
 
   const filteredTransactions = stockTransactions.filter(t => 
     (t.tipo === 'INGRESO' || t.tipo === 'LIQUIDACION') &&
-    t.fecha >= fechaInicio &&
+    t.fecha >= start &&
     t.fecha <= end
   );
 
@@ -865,9 +860,8 @@ const getPeruDateTime = () => {
   });
 
   return grouped;
-}; 
+};
 
-// Función para obtener detalle de ingresos/correcciones de un día específico
 const getStockDetailByDate = (fecha, modelo) => {
   const transactions = stockTransactions.filter(t => 
     t.tipo === 'INGRESO' &&
@@ -875,7 +869,6 @@ const getStockDetailByDate = (fecha, modelo) => {
     t.modelo === modelo
   );
 
-  // Agrupar por hora (cada operación)
   const operacionesPorHora = {};
   transactions.forEach(t => {
     if (!operacionesPorHora[t.hora]) {
@@ -888,7 +881,6 @@ const getStockDetailByDate = (fecha, modelo) => {
     });
   });
 
-  // Convertir a array ordenado
   const operaciones = Object.entries(operacionesPorHora)
     .sort(([horaA], [horaB]) => horaA.localeCompare(horaB))
     .map(([hora, items]) => ({ hora, items }));
@@ -913,7 +905,6 @@ const getStockDetailByDate = (fecha, modelo) => {
       s.fecha <= end
     );
 
-    // Agrupar por fecha y modelo
     const grouped = {};
     filteredSales.forEach(sale => {
       if (!grouped[sale.fecha]) grouped[sale.fecha] = {};
@@ -929,15 +920,27 @@ const getStockDetailByDate = (fecha, modelo) => {
 
   const getStockALaFechaReport = () => {
     const stockByModel = {};
-    
+    const today = getPeruDateTime().fecha;
+
     products.filter(p => p.activo !== false).forEach(product => {
-      let total = 0;
-      Object.values(product.stock || {}).forEach(tallas => {
-        Object.values(tallas).forEach(cantidad => {
-          total += cantidad;
-        });
-      });
-      stockByModel[product.modelo] = total;
+      const ultimaLiquidacion = stockTransactions
+        .filter(t => t.tipo === 'LIQUIDACION' && t.modelo === product.modelo)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora))
+        .at(0);
+
+      const fechaInicio = ultimaLiquidacion ? ultimaLiquidacion.fecha : '2000-01-01';
+
+      const ingresos = stockTransactions
+        .filter(t => t.tipo === 'INGRESO' && t.modelo === product.modelo && t.fecha >= fechaInicio && t.cantidad > 0)
+        .reduce((sum, t) => sum + t.cantidad, 0);
+
+      const ventas = sales
+        .filter(s => s.fecha >= fechaInicio && s.fecha <= today)
+        .reduce((sum, sale) => sum + sale.items
+          .filter(item => item.modelo === product.modelo)
+          .reduce((s, item) => s + item.quantity, 0), 0);
+
+      stockByModel[product.modelo] = ingresos - ventas;
     });
 
     return stockByModel;
@@ -1851,6 +1854,25 @@ return {
         </div>
       </nav>
 
+      {/* BARRA RÁPIDA - solo móvil */}
+<div className="md:hidden bg-white border-b flex">
+  {[
+    { id: 'inventario', icon: ClipboardListIcon, label: 'Inventario' },
+    { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
+    { id: 'reportes', icon: TrendingUp, label: 'Reportes' },
+  ].map(tab => (
+    <button
+      key={tab.id}
+      onClick={() => setActiveTab(tab.id)}
+      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-medium text-xl transition-all
+        ${activeTab === tab.id ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+    >
+      <tab.icon size={20} />
+      <span>{tab.label}</span>
+    </button>
+  ))}
+</div>
+
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-4 py-6 text-xl md:text-base">
         
@@ -1858,7 +1880,7 @@ return {
 {activeTab === 'dashboard' && (
   <div className="space-y-6">
 
-    {/* 4 MÉTRICAS */}
+      {/* 4 MÉTRICAS */}
 <div className="grid grid-cols-4 gap-4">
   {(() => {
     const hoy = getPeruDateTime().fecha;
@@ -4785,15 +4807,38 @@ return {
           {cart.length > 0 ? (
             <>
               <div className="bg-black text-white p-3 rounded-lg mb-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-xl">TOTAL:</span>
-                  <span className="font-bold text-2xl">
-                    S/ {cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}
-                  </span>
-                </div>
-              </div>
+  <div className="flex justify-between items-center">
+    <span className="font-bold text-xl">TOTAL:</span>
+    <span className="font-bold text-2xl">
+      S/ {cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}
+    </span>
+  </div>
+  {(() => {
+    const totalCalculado = cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0);
+    const montoCobrar = parseFloat(ventaPorCobrar) || totalCalculado;
+    const descuento = totalCalculado - montoCobrar;
+    return descuento > 0 ? (
+      <div className="flex justify-between items-center mt-1 text-red-300">
+        <span className="text-lg">Descuento:</span>
+        <span className="text-lg font-bold">- S/ {descuento.toFixed(2)}</span>
+      </div>
+    ) : null;
+  })()}
+</div>
 
-              <button
+<div className="mb-3">
+  <label className="block text-xl font-medium mb-1 text-gray-700">Venta por Cobrar</label>
+  <input
+    type="number"
+    step="0.01"
+    value={ventaPorCobrar}
+    onChange={(e) => setVentaPorCobrar(e.target.value)}
+    placeholder={cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}
+    className="w-full px-3 py-3 border rounded-lg text-xl focus:outline-none focus:ring-2 focus:ring-black/10"
+  />
+</div>
+
+<button
   onClick={completeSale}
   disabled={isProcessing}
   className={`w-full px-4 py-4 md:py-3 rounded-lg font-medium text-3xl md:text-sm text-white ${
@@ -4959,11 +5004,17 @@ return {
 </div>
 
         <div className="bg-black text-white p-4 rounded-lg">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-2xl">TOTAL:</span>
-            <span className="font-bold text-2xl">S/ {viewingSale.total.toFixed(2)}</span>
-          </div>
-        </div>
+  {viewingSale.descuento > 0 && (
+    <div className="flex justify-between items-center mb-2 text-red-300">
+      <span className="text-lg">Descuento:</span>
+      <span className="text-lg font-bold">- S/ {viewingSale.descuento.toFixed(2)}</span>
+    </div>
+  )}
+  <div className="flex justify-between items-center">
+    <span className="font-bold text-2xl">TOTAL:</span>
+    <span className="font-bold text-2xl">S/ {viewingSale.total.toFixed(2)}</span>
+  </div>
+</div>
 
         {/* Botón Eliminar - solo si es venta de hoy */}
         {(() => {
