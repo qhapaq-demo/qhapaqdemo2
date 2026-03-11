@@ -47,6 +47,7 @@ function App() {
   const [pinLiquidar, setPinLiquidar] = useState('');
   const [showPinLiquidar, setShowPinLiquidar] = useState(false);
   const [productoALiquidar, setProductoALiquidar] = useState(null);
+  const [showModalGananciaNeta, setShowModalGananciaNeta] = useState(false);
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -3027,6 +3028,37 @@ return {
       </div>
     </div>
 
+    {/* RESUMEN VENTAS + GANANCIA */}
+{(() => {
+  const { start, end } = getDateRangeForFilter(reportFilter);
+  const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
+  const totalVentas = ventasFiltradas.reduce((s, v) => s + v.total, 0);
+  const totalGanancia = ventasFiltradas.reduce((sum, sale) => {
+    return sum + sale.items.reduce((s, item) => {
+      const producto = products.find(p => p.modelo === item.modelo);
+      const compra = producto?.precio_compra || producto?.precioCompra || 0;
+      return s + (item.precioVenta - compra) * item.quantity;
+    }, 0);
+  }, 0);
+
+  return (
+    <div className="bg-white rounded-xl border flex divide-x">
+      <div className="flex-1 px-4 py-3">
+        <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+          {reportFilter === 'hoy' ? 'Ventas de hoy' : 'Ventas del período'}
+        </p>
+        <p className="text-xl font-bold text-emerald-600">S/ {totalVentas.toFixed(2)}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{ventasFiltradas.length} pedidos</p>
+      </div>
+      <div className="flex-1 px-4 py-3">
+        <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Ganancia neta</p>
+        <p className="text-xl font-bold text-blue-600">S/ {totalGanancia.toFixed(2)}</p>
+        <p className="text-xs text-gray-400 mt-0.5">venta − compra</p>
+      </div>
+    </div>
+  );
+})()}
+
     {/* Sales List - MÁS COMPACTO */}
     <div className="space-y-2">
       {(() => {
@@ -3214,6 +3246,24 @@ return {
 </div>
   </div>
 )}
+
+{/* Tarjeta 5: Ganancia Neta */}
+<div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-green-100 to-white">
+  <div className="flex items-start justify-between mb-4">
+    <div>
+      <h3 className="text-2xl font-bold mb-1">Ganancia Neta</h3>
+      <p className="text-lg text-gray-600">Venta − Compra por día</p>
+    </div>
+    <TrendingUp className="text-green-600" size={24} />
+  </div>
+  <button
+    onClick={() => setShowModalGananciaNeta(true)}
+    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+  >
+    <Eye size={20} />
+    Ver Reporte
+  </button>
+</div>
 
 {/* MODAL: Stock General */}
 {showModalStockGeneral && (
@@ -5186,6 +5236,108 @@ return {
         >
           Confirmar Liquidar
         </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: Ganancia Neta */}
+{showModalGananciaNeta && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+        <h2 className="text-xl font-bold">💰 Ganancia Neta</h2>
+        <button onClick={() => setShowModalGananciaNeta(false)}><X size={20} /></button>
+      </div>
+      <div className="p-4">
+        {(() => {
+          const { start, end } = getDateRangeForFilter(reportFilter);
+          const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
+
+          // Agrupar por día
+          const porDia = {};
+          ventasFiltradas.forEach(sale => {
+            if (!porDia[sale.fecha]) porDia[sale.fecha] = { vendido: 0, comprado: 0, pedidos: 0 };
+            porDia[sale.fecha].vendido  += sale.total;
+            porDia[sale.fecha].pedidos  += 1;
+            sale.items.forEach(item => {
+              const producto = products.find(p => p.modelo === item.modelo);
+              const compra = producto?.precio_compra || producto?.precioCompra || 0;
+              porDia[sale.fecha].comprado += compra * item.quantity;
+            });
+          });
+
+          const dias = Object.entries(porDia).sort((a, b) => b[0].localeCompare(a[0]));
+          const totVendido  = dias.reduce((s, [, d]) => s + d.vendido,  0);
+          const totComprado = dias.reduce((s, [, d]) => s + d.comprado, 0);
+          const totGanancia = totVendido - totComprado;
+
+          return (
+            <>
+              {/* Tarjetas resumen */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-blue-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Total Vendido</p>
+                  <p className="text-lg font-bold text-blue-600">S/ {totVendido.toFixed(2)}</p>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Total Comprado</p>
+                  <p className="text-lg font-bold text-red-500">S/ {totComprado.toFixed(2)}</p>
+                </div>
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Ganancia Neta</p>
+                  <p className="text-lg font-bold text-green-600">S/ {totGanancia.toFixed(2)}</p>
+                </div>
+              </div>
+
+              {/* Tabla por día */}
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-black text-white">
+                      <th className="p-3 text-left">Fecha</th>
+                      <th className="p-3 text-center">Pedidos</th>
+                      <th className="p-3 text-center">Vendido</th>
+                      <th className="p-3 text-center">Comprado</th>
+                      <th className="p-3 text-center">Ganancia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dias.length === 0 ? (
+                      <tr><td colSpan={5} className="p-6 text-center text-gray-400">Sin ventas en este período</td></tr>
+                    ) : (
+                      <>
+                        {dias.map(([fecha, d], i) => {
+                          const ganancia = d.vendido - d.comprado;
+                          return (
+                            <tr key={fecha} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="p-3 font-medium">{fecha.split('-').reverse().join('/')}</td>
+                              <td className="p-3 text-center text-gray-500">{d.pedidos}</td>
+                              <td className="p-3 text-center text-blue-600 font-medium">S/ {d.vendido.toFixed(2)}</td>
+                              <td className="p-3 text-center text-red-500">S/ {d.comprado.toFixed(2)}</td>
+                              <td className="p-3 text-center">
+                                <span className={`font-bold px-2 py-0.5 rounded-lg ${ganancia >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                                  S/ {ganancia.toFixed(2)}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-black text-white font-bold">
+                          <td className="p-3">TOTAL</td>
+                          <td className="p-3 text-center">{ventasFiltradas.length}</td>
+                          <td className="p-3 text-center">S/ {totVendido.toFixed(2)}</td>
+                          <td className="p-3 text-center">S/ {totComprado.toFixed(2)}</td>
+                          <td className="p-3 text-center text-green-400">S/ {totGanancia.toFixed(2)}</td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   </div>
