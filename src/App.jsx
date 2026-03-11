@@ -3639,7 +3639,7 @@ return {
                     setNewTallaInput('');
                   }
                 }}
-                className="w-900 px-3 py-1 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                className="w-80 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                 placeholder="Ej: S, M, 28, ST, UNICO..."
               />
               <button
@@ -3660,7 +3660,7 @@ return {
                   }
                   setNewTallaInput('');
                 }}
-                className="ml-8 px-3 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-xl"
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-xl"
               >+</button>
             </div>
             <div className="flex flex-wrap gap-2 min-h-[32px]">
@@ -3711,7 +3711,7 @@ return {
                     addColorToProduct(editingProduct || newProduct);
                   }
                 }}
-                className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                className="w-80 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                 placeholder="Ej: Negro, Azul Marino, Verde Olivo..."
               />
               <button
