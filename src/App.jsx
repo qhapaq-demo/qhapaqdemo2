@@ -44,6 +44,9 @@ function App() {
   const [showStockDetail, setShowStockDetail] = useState(false);
   const [stockDetailData, setStockDetailData] = useState(null);
   const [colorSwatches, setColorSwatches] = useState([]);  
+  const [pinLiquidar, setPinLiquidar] = useState('');
+  const [showPinLiquidar, setShowPinLiquidar] = useState(false);
+  const [productoALiquidar, setProductoALiquidar] = useState(null);
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -735,7 +738,7 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
       stockTransactionsToInsert.push({
         fecha: fecha,
         hora: hora,
-        tipo: 'INGRESO',
+        tipo: cantidadInt < 0 ? 'CORRECCION' : 'INGRESO',  // ← CAMBIO
         modelo: product.modelo,
         color: color,
         talla: talla,
@@ -2437,7 +2440,7 @@ return {
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1 text-left font-bold w-12">FECHA</th>
+            <th className="border p-1 text-left font-bold w-12 sticky left-0 bg-gray-100 z-10">FECHA</th>
             {(() => {
               const ingresoData = getIngresoStockReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
@@ -2466,7 +2469,7 @@ return {
               <>
                 {Object.entries(ingresoData).map(([fecha, modelos]) => (
                   <tr key={fecha}>
-                    <td className="border p-1 font-medium">{fecha.split('-').slice(1).reverse().join('/')}</td>
+                   <td className="border p-1 font-medium sticky left-0 bg-white z-10">{fecha.split('-').slice(1).reverse().join('/')}</td>
                     {sortedProducts.map(p => (
                       <td key={p.id} className="border p-1.5 text-center cursor-pointer hover:bg-blue-50"
                         onClick={() => {
@@ -2488,7 +2491,7 @@ return {
                   </tr>
                 ))}
                 <tr className="bg-gray-50 font-bold">
-                  <td className="border p-2">TOTAL</td>
+                  <td className="border p-2 sticky left-0 bg-gray-50 z-10">TOTAL</td>
                   {sortedProducts.map(p => (
                     <td key={p.id} className="border p-2 text-center text-base font-bold">
                       {Object.values(ingresoData).reduce((sum, m) => sum + (m[p.modelo]?.ingreso || 0) + (m[p.modelo]?.correccion || 0), 0)}
@@ -2527,7 +2530,7 @@ return {
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border p-1 text-left font-bold w-12">FECHA</th>
+            <th className="border p-1 text-left font-bold w-12 sticky left-0 bg-gray-100 z-10">FECHA</th>
             {(() => {
               const salidaData = getSalidaVentasReport();
               const sortedProducts = [...products].filter(p => p.activo !== false).sort((a, b) => {
@@ -2556,14 +2559,14 @@ return {
               <>
                 {Object.entries(salidaData).map(([fecha, modelos]) => (
                   <tr key={fecha}>
-                    <td className="border p-1 font-medium">{fecha.split('-').slice(1).reverse().join('/')}</td>
+                    <td className="border p-1 font-medium sticky left-0 bg-white z-10">{fecha.split('-').slice(1).reverse().join('/')}</td>
                     {sortedProducts.map(p => (
                       <td key={p.id} className="border p-1.5 text-center text-base">{modelos[p.modelo] || '0'}</td>
                     ))}
                   </tr>
                 ))}
                 <tr className="bg-gray-50 font-bold">
-                  <td className="border p-2">TOTAL</td>
+                  <td className="border p-2 sticky left-0 bg-gray-50 z-10">TOTAL</td>
                   {sortedProducts.map(p => (
                     <td key={p.id} className="border p-2 text-center text-base font-bold">
                       {Object.values(salidaData).reduce((sum, m) => sum + (Number(m[p.modelo]) || 0), 0)}
@@ -3636,7 +3639,7 @@ return {
                     setNewTallaInput('');
                   }
                 }}
-                className="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                className="w-900 px-3 py-1 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                 placeholder="Ej: S, M, 28, ST, UNICO..."
               />
               <button
@@ -3657,14 +3660,14 @@ return {
                   }
                   setNewTallaInput('');
                 }}
-                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-lg"
+                className="ml-8 px-3 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-xl"
               >+</button>
             </div>
             <div className="flex flex-wrap gap-2 min-h-[32px]">
               {(editingProduct ? (editingProduct.tallas || []) : newProduct.tallas).length === 0
                 ? <p className="text-base text-gray-400 italic">Aún no hay tallas — agrega la primera</p>
                 : (editingProduct ? (editingProduct.tallas || []) : newProduct.tallas).map(t => (
-                  <span key={t} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-900 text-white border border-gray-700">
+                  <span key={t} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-base font-medium bg-gray-900 text-white border border-gray-700">
                     {t}
                     <button
                       onClick={() => {
@@ -3814,7 +3817,7 @@ return {
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  {[...(editingProduct ? editingProduct.colors : newProduct.colors)].sort().slice(0, 6).map((color) => {
+                  {[...(editingProduct ? editingProduct.colors : newProduct.colors)].sort().map((color) => {
                     const imgColores = editingProduct ? (editingProduct.imagenes_colores || {}) : (newProduct.imagenes_colores || {});
                     const preview = imgColores[color];
                     return (
@@ -3945,56 +3948,21 @@ return {
         </div>
 
         {/* Botón Liquidar Stock */}
-        {stockToAdd.modelo && (
-          <div className="flex justify-end">
-            <button
-              onClick={async () => {
-                const product = products.find(p => p.modelo === stockToAdd.modelo);
-                if (!product) return;
-                const confirmar = window.confirm(`⚠️ ¿Confirmas liquidar el stock de "${product.modelo}"?\n\nTodas las cantidades quedarán en 0. Esta acción no se puede deshacer.`);
-                if (!confirmar) return;
-                const { fecha, hora } = getPeruDateTime();
-                const stockEnCero = {};
-                const transacciones = [];
-                product.colors.forEach(color => {
-                  stockEnCero[color] = {};
-                  const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
-                  tallas.forEach(talla => {
-                    stockEnCero[color][talla] = 0;
-                    const stockActual = product.stock?.[color]?.[talla] || 0;
-                    if (stockActual > 0) {
-                      transacciones.push({
-                        fecha, hora,
-                        tipo: 'LIQUIDACION',
-                        modelo: product.modelo,
-                        color, talla,
-                        cantidad: -stockActual,
-                        notes: '🔴 Liquidación de stock'
-                      });
-                    }
-                  });
-                });
-                try {
-                  if (transacciones.length > 0) {
-                    const { error } = await supabase.from('stock_transactions').insert(transacciones);
-                    if (error) throw error;
-                    console.log('✅ Transacciones liquidación:', transacciones);
-                  }
-                  await supabase.from('products').update({ stock: stockEnCero }).eq('id', product.id);
-                  setProducts(products.map(p => p.id === product.id ? { ...p, stock: stockEnCero } : p));
-                  setStockToAdd({ modelo: '', colors: {} });
-                  setStockFechaManual('');
-                  alert(`✅ Stock de "${product.modelo}" liquidado correctamente.`);
-                } catch (error) {
-                  alert('❌ Error al liquidar: ' + error.message);
-                }
-              }}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xl flex items-center gap-2"
-            >
-              🔴 Liquidar Stock
-            </button>
-          </div>
-        )}
+{stockToAdd.modelo && (
+  <div className="flex justify-end">
+    <button
+      onClick={() => {
+        const product = products.find(p => p.modelo === stockToAdd.modelo);
+        if (!product) return;
+        setProductoALiquidar(product);
+        setShowPinLiquidar(true);
+      }}
+      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xl flex items-center gap-2"
+    >
+      🔴 Liquidar Stock
+    </button>
+  </div>
+)}
 
         {/* Input unificado para todas las tallas */}
         {stockToAdd.modelo && (
@@ -5136,6 +5104,87 @@ return {
           className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl text-base font-medium hover:bg-red-700 transition-colors"
         >
           Sí, eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* MODAL: PIN Liquidar Stock */}
+{showPinLiquidar && productoALiquidar && (
+  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+      <div className="text-center mb-5">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-3xl">🔴</span>
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">Liquidar Stock</h2>
+        <p className="text-gray-500 text-base mt-2">
+          Estás a punto de poner en <strong>0</strong> todo el stock de{' '}
+          <span className="font-semibold text-gray-800">"{productoALiquidar.modelo}"</span>.
+          Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div className="mb-4">
+        <label className="text-sm font-medium text-gray-700 mb-1 block">PIN de Administrador</label>
+        <input
+          type="password"
+          value={pinLiquidar}
+          onChange={(e) => setPinLiquidar(e.target.value)}
+          placeholder="Ingresa tu PIN"
+          maxLength={8}
+          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-center text-xl font-mono focus:outline-none focus:border-red-400"
+        />
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={() => { setShowPinLiquidar(false); setPinLiquidar(''); setProductoALiquidar(null); }}
+          className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-base font-medium text-gray-600 hover:bg-gray-50"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={async () => {
+            const { data: cfg } = await supabase.from('configuracion').select('pin_admin').limit(1).single();
+            if (pinLiquidar !== cfg?.pin_admin) {
+              alert('❌ PIN incorrecto');
+              setPinLiquidar('');
+              return;
+            }
+            const product = productoALiquidar;
+            const { fecha, hora } = getPeruDateTime();
+            const stockEnCero = {};
+            const transacciones = [];
+            product.colors.forEach(color => {
+              stockEnCero[color] = {};
+              const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
+              tallas.forEach(talla => {
+                stockEnCero[color][talla] = 0;
+                const stockActual = product.stock?.[color]?.[talla] || 0;
+                if (stockActual > 0) {
+                  transacciones.push({ fecha, hora, tipo: 'LIQUIDACION', modelo: product.modelo, color, talla, cantidad: -stockActual, notes: '🔴 Liquidación de stock' });
+                }
+              });
+            });
+            try {
+              if (transacciones.length > 0) {
+                await supabase.from('stock_transactions').insert(transacciones);
+              }
+              await supabase.from('products').update({ stock: stockEnCero }).eq('id', product.id);
+              setProducts(products.map(p => p.id === product.id ? { ...p, stock: stockEnCero } : p));
+              setStockToAdd({ modelo: '', colors: {} });
+              setShowPinLiquidar(false);
+              setPinLiquidar('');
+              setProductoALiquidar(null);
+              setShowAddStock(false);
+              alert(`✅ Stock de "${product.modelo}" liquidado correctamente.`);
+            } catch (error) {
+              alert('❌ Error al liquidar: ' + error.message);
+            }
+          }}
+          className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl text-base font-medium hover:bg-red-700"
+        >
+          Confirmar Liquidar
         </button>
       </div>
     </div>
