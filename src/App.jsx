@@ -3168,7 +3168,7 @@ return {
       </div>
     </div>
 
-    {/* Panel de Reportes - 4 Tarjetas */}
+    {/* Panel de Reportes - 5 Tarjetas */}
 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
   
   {/* Tarjeta 1: Stock General */}
@@ -3243,10 +3243,6 @@ return {
     </button>
   </div>
 
-</div>
-  </div>
-)}
-
 {/* Tarjeta 5: Ganancia Neta */}
 <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-green-100 to-white">
   <div className="flex items-start justify-between mb-4">
@@ -3264,6 +3260,10 @@ return {
     Ver Reporte
   </button>
 </div>
+
+</div>
+  </div>
+)}
 
 {/* MODAL: Stock General */}
 {showModalStockGeneral && (
@@ -5242,7 +5242,7 @@ return {
 )}
 
 {/* MODAL: Ganancia Neta */}
-{showModalGananciaNeta && (
+{showModalGananciaNeta && activeTab === 'ventas' && (
   <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
