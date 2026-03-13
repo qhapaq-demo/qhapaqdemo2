@@ -945,9 +945,14 @@ const getStockDetailByDate = (fecha, modelo) => {
 
       const fechaInicio = ultimaLiquidacion ? ultimaLiquidacion.fecha : '2000-01-01';
 
-      const ingresos = stockTransactions
-        .filter(t => t.tipo === 'INGRESO' && t.modelo === product.modelo && t.fecha >= fechaInicio && t.cantidad > 0)
-        .reduce((sum, t) => sum + t.cantidad, 0);
+      // ✅ DESPUÉS — incluye correcciones negativas
+const ingresos = stockTransactions
+  .filter(t => 
+    (t.tipo === 'INGRESO' || t.tipo === 'CORRECCION') && 
+    t.modelo === product.modelo && 
+    t.fecha >= fechaInicio
+  )
+  .reduce((sum, t) => sum + t.cantidad, 0);
 
       const ventas = sales
         .filter(s => s.fecha >= fechaInicio && s.fecha <= today)
@@ -5242,7 +5247,7 @@ return {
 )}
 
 {/* MODAL: Ganancia Neta */}
-{showModalGananciaNeta && activeTab === 'ventas' && (
+{showModalGananciaNeta && (
   <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
