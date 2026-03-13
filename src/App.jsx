@@ -284,6 +284,12 @@ useEffect(() => {
       .eq('auth_id', session.user.id)
       .single();
     setUserRol(usuarioApp?.rol || 'vendedor');
+
+    const tabsPermitidos = ['inventario', 'ventas', 'reportes'];
+    const tabGuardado = localStorage.getItem('abermud-active-tab');
+    if (usuarioApp?.rol === 'vendedor' && !tabsPermitidos.includes(tabGuardado)) {
+      setActiveTab('inventario');
+    }
   }
 
   await Promise.all([
@@ -1812,7 +1818,7 @@ return {
       
       {/* Logo clickeable - vuelve al Dashboard */}
       <button 
-        onClick={() => setActiveTab('dashboard')}
+        onClick={() => setActiveTab(userRol === 'admin' ? 'dashboard' : 'inventario')}
         className="flex items-center gap-3 hover:opacity-80 transition-opacity"
       >
         <img 
@@ -2354,13 +2360,15 @@ return {
     {/* Header */}
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <h2 className="text-2xl font-bold text-gray-900">Inventario</h2>
-      <button
-        onClick={() => setShowAddStock(true)}
-        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
-      >
-        <Plus size={22} />
-        Agregar Stock
-      </button>
+      {userRol === 'admin' && (
+  <button
+    onClick={() => setShowAddStock(true)}
+    className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+  >
+    <Plus size={22} />
+    Agregar Stock
+  </button>
+)}
     </div>
 
     {/* REPORTES DE INVENTARIO */}
@@ -3040,7 +3048,7 @@ return {
       </div>
     </div>
 
-    {userRol === 'admin' && (() => {
+   {(() => {
   const { start, end } = getDateRangeForFilter(reportFilter);
   const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
   const totalVentas = ventasFiltradas.reduce((s, v) => s + v.total, 0);
@@ -3054,6 +3062,7 @@ return {
 
   return (
     <div className="bg-white rounded-xl border flex divide-x">
+      {/* Todos ven esto */}
       <div className="flex-1 px-4 py-3">
         <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
           {reportFilter === 'hoy' ? 'Ventas de hoy' : 'Ventas del período'}
@@ -3061,11 +3070,14 @@ return {
         <p className="text-xl font-bold text-emerald-600">S/ {totalVentas.toFixed(2)}</p>
         <p className="text-xs text-gray-400 mt-0.5">{ventasFiltradas.length} pedidos</p>
       </div>
-      <div className="flex-1 px-4 py-3">
-        <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Ganancia neta</p>
-        <p className="text-xl font-bold text-blue-600">S/ {totalGanancia.toFixed(2)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">venta − compra</p>
-      </div>
+      {/* Solo admin */}
+      {userRol === 'admin' && (
+        <div className="flex-1 px-4 py-3">
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Ganancia neta</p>
+          <p className="text-xl font-bold text-blue-600">S/ {totalGanancia.toFixed(2)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">venta − compra</p>
+        </div>
+      )}
     </div>
   );
 })()}
