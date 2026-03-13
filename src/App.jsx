@@ -1651,76 +1651,73 @@ return {
       )}
 
       {/* TABLA 1: Ventas por Medio con fechas */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-800 text-white p-3">
-          <span className="font-bold text-xl">📊 VENTAS POR MEDIO</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-base">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="p-3 text-left font-bold border-r">FECHA</th>
-                {medios.map(m => (
-                  <th key={m} colSpan={2} className="p-3 text-center font-bold border-r">{m}</th>
-                ))}
-                <th className="p-3 text-center font-bold bg-gray-200">TOTAL</th>
-              </tr>
-              <tr className="bg-gray-50 text-sm text-gray-500">
-                <th className="p-2 border-r"></th>
-                {medios.map(m => (
-                  <React.Fragment key={m}>
-                    <th className="p-2 text-center">Ventas</th>
-                    <th className="p-2 text-center border-r">Monto</th>
-                  </React.Fragment>
-                ))}
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {fechasOrdenadas.length === 0 ? (
-                <tr><td colSpan={medios.length * 2 + 2} className="p-4 text-center text-gray-400">Sin ventas en este período</td></tr>
-              ) : (
-                <>
-                  {fechasOrdenadas.map((fecha, idx) => {
-                    const filaTotal = medios.reduce((s, m) => s + (porFechaMedia[fecha][m]?.cantidad || 0), 0);
+<div className="border rounded-lg overflow-hidden">
+  <div className="bg-gray-800 text-white p-3">
+    <span className="font-bold text-xl">📊 VENTAS POR MEDIO</span>
+  </div>
+  <div className="overflow-x-auto">
+    <table className="w-full text-base">
+      <thead>
+        <tr className="bg-gray-100">
+          <th className="p-3 text-left font-bold border-r whitespace-nowrap">FECHA</th>
+          {medios.map(m => (
+            <th key={m} colSpan={2} className="p-3 text-center font-bold border-r whitespace-nowrap">{m}</th>
+          ))}
+        </tr>
+        <tr className="bg-gray-50 text-sm text-gray-500">
+          <th className="p-2 border-r"></th>
+          {medios.map(m => (
+            <React.Fragment key={m}>
+              <th className="p-2 text-center whitespace-nowrap">Ventas</th>
+              <th className="p-2 text-center border-r whitespace-nowrap">Monto</th>
+            </React.Fragment>
+          ))}
+          <th className="p-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {fechasOrdenadas.length === 0 ? (
+          <tr><td colSpan={medios.length * 2 + 2} className="p-4 text-center text-gray-400">Sin ventas en este período</td></tr>
+        ) : (
+          <>
+            {fechasOrdenadas.map((fecha, idx) => {
+              const filaTotal = medios.reduce((s, m) => s + (porFechaMedia[fecha][m]?.cantidad || 0), 0);
+              return (
+                <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="p-3 font-medium whitespace-nowrap border-r">
+                    {fecha.split('-').slice(1).reverse().join('/')}
+                  </td>
+                  {medios.map(m => {
+                    const data = porFechaMedia[fecha][m];
                     return (
-                      <tr key={fecha} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="p-3 font-medium whitespace-nowrap border-r">
-                          {fecha.split('-').slice(1).reverse().join('/')}
+                      <React.Fragment key={m}>
+                        <td className={`p-3 text-center whitespace-nowrap ${data?.cantidad > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
+                          {data?.cantidad || 0}
                         </td>
-                        {medios.map(m => {
-                          const data = porFechaMedia[fecha][m];
-                          return (
-                            <React.Fragment key={m}>
-                              <td className={`p-3 text-center ${data?.cantidad > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
-                                {data?.cantidad || 0}
-                              </td>
-                              <td className={`p-3 text-center border-r ${data?.monto > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
-                                {data?.monto ? `S/ ${data.monto.toFixed(2)}` : '-'}
-                              </td>
-                            </React.Fragment>
-                          );
-                        })}
-                        <td className="p-3 text-center font-bold bg-gray-100">{filaTotal}</td>
-                      </tr>
+                        <td className={`p-3 text-center border-r whitespace-nowrap ${data?.monto > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                          {data?.monto ? `S/ ${data.monto.toFixed(2)}` : '-'}
+                        </td>
+                      </React.Fragment>
                     );
                   })}
-                  <tr className="bg-black text-white">
-                    <td className="p-3 font-bold border-r">TOTAL</td>
-                    {medios.map(m => (
-                      <React.Fragment key={m}>
-                        <td className="p-3 text-center font-bold">{totalPorMedio[m]?.cantidad || 0}</td>
-                        <td className="p-3 text-center font-bold border-r">S/ {(totalPorMedio[m]?.monto || 0).toFixed(2)}</td>
-                      </React.Fragment>
-                    ))}
-                    <td className="p-3 text-center font-bold">{ventasFiltradas.length}</td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </tr>
+              );
+            })}
+            <tr className="bg-black text-white">
+              <td className="p-3 font-bold border-r whitespace-nowrap">TOTAL</td>
+              {medios.map(m => (
+                <React.Fragment key={m}>
+                  <td className="p-3 text-center font-bold whitespace-nowrap">{totalPorMedio[m]?.cantidad || 0}</td>
+                  <td className="p-3 text-center font-bold border-r whitespace-nowrap">S/ {(totalPorMedio[m]?.monto || 0).toFixed(2)}</td>
+                </React.Fragment>
+              ))}
+            </tr>
+          </>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
       {/* TABLA 2: Clientes completos */}
       <div className="border rounded-lg overflow-hidden">
@@ -5309,60 +5306,60 @@ return {
               </div>
 
               {/* Tabla por día */}
-              <div className="border rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-black text-white">
-                      <th className="p-3 text-left">Fecha</th>
-                      <th className="p-3 text-center">Pedidos</th>
-                      <th className="p-3 text-center">Vendido</th>
-                      <th className="p-3 text-center">Comprado</th>
-                      <th className="p-3 text-center">Ganancia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dias.length === 0 ? (
-                      <tr><td colSpan={5} className="p-6 text-center text-gray-400">Sin ventas en este período</td></tr>
-                    ) : (
-                      <>
-                        {dias.map(([fecha, d], i) => {
-                          const ganancia = d.vendido - d.comprado;
-                          return (
-                            <tr key={fecha} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="p-3 font-medium">{fecha.split('-').reverse().join('/')}</td>
-                              <td className="p-3 text-center text-gray-500">{d.pedidos}</td>
-                              <td className="p-3 text-center text-blue-600 font-medium">S/ {d.vendido.toFixed(2)}</td>
-                              <td className="p-3 text-center text-red-500">S/ {d.comprado.toFixed(2)}</td>
-                              <td className="p-3 text-center">
-                                <span className={`font-bold px-2 py-0.5 rounded-lg ${ganancia >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
-                                  S/ {ganancia.toFixed(2)}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        <tr className="bg-black text-white font-bold">
-                          <td className="p-3">TOTAL</td>
-                          <td className="p-3 text-center">{ventasFiltradas.length}</td>
-                          <td className="p-3 text-center">S/ {totVendido.toFixed(2)}</td>
-                          <td className="p-3 text-center">S/ {totComprado.toFixed(2)}</td>
-                          <td className="p-3 text-center text-green-400">S/ {totGanancia.toFixed(2)}</td>
-                        </tr>
-                      </>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          );
-        })()}
-      </div>
-    </div>
-  </div>
+<div className="border rounded-xl overflow-x-auto">
+  <table className="w-full text-sm">
+    <thead>
+      <tr className="bg-black text-white">
+        <th className="p-3 text-left whitespace-nowrap">Fecha</th>
+        <th className="p-3 text-center whitespace-nowrap">Pedidos</th>
+        <th className="p-3 text-center whitespace-nowrap">P.Venta</th>
+        <th className="p-3 text-center whitespace-nowrap">P.Compra</th>
+        <th className="p-3 text-center whitespace-nowrap">Ganancia</th>
+      </tr>
+    </thead>
+    <tbody>
+      {dias.length === 0 ? (
+        <tr><td colSpan={5} className="p-6 text-center text-gray-400">Sin ventas en este período</td></tr>
+      ) : (
+        <>
+          {dias.map(([fecha, d], i) => {
+            const ganancia = d.vendido - d.comprado;
+            return (
+              <tr key={fecha} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="p-3 font-medium whitespace-nowrap">{fecha.slice(5).split('-').reverse().join('/')}</td>
+                <td className="p-3 text-center text-gray-500 whitespace-nowrap">{d.pedidos}</td>
+                <td className="p-3 text-center text-blue-600 font-medium whitespace-nowrap">S/ {d.vendido.toFixed(2)}</td>
+                <td className="p-3 text-center text-red-500 whitespace-nowrap">S/ {d.comprado.toFixed(2)}</td>
+                <td className="p-2 text-center whitespace-nowrap">
+                  <span className={`font-bold px-1 py-0.5 rounded-lg ${ganancia >= 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                    S/ {ganancia.toFixed(2)}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+          <tr className="bg-black text-white font-bold">
+            <td className="p-3 whitespace-nowrap">TOTAL</td>
+            <td className="p-3 text-center whitespace-nowrap">{ventasFiltradas.length}</td>
+            <td className="p-3 text-center whitespace-nowrap">S/ {totVendido.toFixed(2)}</td>
+            <td className="p-3 text-center whitespace-nowrap">S/ {totComprado.toFixed(2)}</td>
+            <td className="p-3 text-center text-green-400 whitespace-nowrap">S/ {totGanancia.toFixed(2)}</td>
+          </tr>
+        </>
+      )}
+    </tbody>
+  </table>
+</div>
+</>
+);
+})()}
+</div>
+</div>
+</div>
 )}
 
-    </div>
-  );
+  </div>
+);
 }
 
 export default App;
