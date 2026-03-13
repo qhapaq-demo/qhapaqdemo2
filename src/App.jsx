@@ -48,6 +48,7 @@ function App() {
   const [showPinLiquidar, setShowPinLiquidar] = useState(false);
   const [productoALiquidar, setProductoALiquidar] = useState(null);
   const [showModalGananciaNeta, setShowModalGananciaNeta] = useState(false);
+  const [userRol, setUserRol] = useState(null);
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -272,15 +273,27 @@ useEffect(() => {
 }, [activeTab]);
 
   const loadAllData = async () => {
-    setLoading(true);
-    await Promise.all([
-      loadProducts(),
-      loadClients(),
-      loadSales(),
-      loadStockTransactions()
-    ]);
-    setLoading(false);
-  };
+  setLoading(true);
+
+  // Cargar rol del usuario logueado
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user?.id) {
+    const { data: usuarioApp } = await supabase
+      .from('usuarios_app')
+      .select('rol')
+      .eq('auth_id', session.user.id)
+      .single();
+    setUserRol(usuarioApp?.rol || 'vendedor');
+  }
+
+  await Promise.all([
+    loadProducts(),
+    loadClients(),
+    loadSales(),
+    loadStockTransactions()
+  ]);
+  setLoading(false);
+};
 
   const loadProducts = async () => {
     const { data, error } = await supabase
@@ -1861,33 +1874,27 @@ return {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2 text-xl">
             {[
-              { id: 'dashboard', icon: Home, label: 'Dashboard' },
-              { id: 'productos', icon: Package, label: 'Productos' },
-              { id: 'inventario', icon: ClipboardListIcon, label: 'Inventario' },
-              { id: 'clientes', icon: Users, label: 'Clientes' },
-              { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
-              { id: 'reportes', icon: TrendingUp, label: 'Reportes' },
-              { id: 'backup', icon: Download, label: 'Backup' },
-              { id: 'configuracion', icon: Settings, label: 'Configuración' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={`
-                  flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
-                  ${activeTab === tab.id 
-                    ? 'bg-black text-white' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                  }
-                `}
-              >
-                <tab.icon size={20} />
-                <span>{tab.label}</span>
-              </button>
-            ))}
+  { id: 'dashboard',      icon: Home,              label: 'Dashboard',      soloAdmin: true  },
+  { id: 'productos',      icon: Package,           label: 'Productos',      soloAdmin: true  },
+  { id: 'inventario',     icon: ClipboardListIcon, label: 'Inventario',     soloAdmin: false },
+  { id: 'clientes',       icon: Users,             label: 'Clientes',       soloAdmin: true  },
+  { id: 'ventas',         icon: ShoppingCart,      label: 'Ventas',         soloAdmin: false },
+  { id: 'reportes',       icon: TrendingUp,        label: 'Reportes',       soloAdmin: false },
+  { id: 'backup',         icon: Download,          label: 'Backup',         soloAdmin: true  },
+  { id: 'configuracion',  icon: Settings,          label: 'Configuración',  soloAdmin: true  },
+]
+.filter(tab => !tab.soloAdmin || userRol === 'admin')
+.map(tab => (
+  <button
+    key={tab.id}
+    onClick={() => { setActiveTab(tab.id); setMobileMenuOpen(false); }}
+    className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
+      ${activeTab === tab.id ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+  >
+    <tab.icon size={20} />
+    <span>{tab.label}</span>
+  </button>
+))}
           </div>
         </div>
       </nav>
@@ -3033,8 +3040,7 @@ return {
       </div>
     </div>
 
-    {/* RESUMEN VENTAS + GANANCIA */}
-{(() => {
+    {userRol === 'admin' && (() => {
   const { start, end } = getDateRangeForFilter(reportFilter);
   const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
   const totalVentas = ventasFiltradas.reduce((s, v) => s + v.total, 0);
@@ -3212,62 +3218,57 @@ return {
     </button>
   </div>
 
-  {/* Tarjeta 3: Reporte de Ventas */}
-  <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
-    <div className="flex items-start justify-between mb-4">
-      <div>
-        <h3 className="text-2xl font-bold mb-1">Reporte de Ventas</h3>
-        <p className="text-lg text-gray-600">Por modelo</p>
+  {userRol === 'admin' && (
+    <>
+      {/* Tarjeta 3: Reporte de Ventas */}
+      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-2xl font-bold mb-1">Reporte de Ventas</h3>
+            <p className="text-lg text-gray-600">Por modelo</p>
+          </div>
+          <FileText className="text-emerald-600" size={24} />
+        </div>
+        <button onClick={() => setShowModalReporteVentas(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          <Eye size={20} />Ver Reporte
+        </button>
       </div>
-      <FileText className="text-emerald-600" size={24} />
-    </div>
-    <button
-      onClick={() => setShowModalReporteVentas(true)}
-      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-    >
-      <Eye size={20} />
-      Ver Reporte
-    </button>
-  </div>
 
-  {/* Tarjeta 4: Análisis de Ventas */}
-  <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
-    <div className="flex items-start justify-between mb-4">
-      <div>
-        <h3 className="text-2xl font-bold mb-1">Análisis de Ventas</h3>
-        <p className="text-lg text-gray-600">Medio, clientes y departamento</p>
+      {/* Tarjeta 4: Análisis de Ventas */}
+      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-slate-100 to-white">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-2xl font-bold mb-1">Análisis de Ventas</h3>
+            <p className="text-lg text-gray-600">Medio, clientes y departamento</p>
+          </div>
+          <FileText className="text-slate-600" size={24} />
+        </div>
+        <button onClick={() => setShowModalAnalisisVentas(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          <Eye size={20} />Ver Reporte
+        </button>
       </div>
-      <FileText className="text-slate-600" size={24} />
-    </div>
-    <button
-      onClick={() => setShowModalAnalisisVentas(true)}
-      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-    >
-      <Eye size={20} />
-      Ver Reporte
-    </button>
-  </div>
 
-{/* Tarjeta 5: Ganancia Neta */}
-<div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-green-100 to-white">
-  <div className="flex items-start justify-between mb-4">
-    <div>
-      <h3 className="text-2xl font-bold mb-1">Ganancia Neta</h3>
-      <p className="text-lg text-gray-600">Venta − Compra por día</p>
-    </div>
-    <TrendingUp className="text-green-600" size={24} />
-  </div>
-  <button
-    onClick={() => setShowModalGananciaNeta(true)}
-    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
-  >
-    <Eye size={20} />
-    Ver Reporte
-  </button>
-</div>
+      {/* Tarjeta 5: Ganancia Neta */}
+      <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-green-100 to-white">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-2xl font-bold mb-1">Ganancia Neta</h3>
+            <p className="text-lg text-gray-600">Venta − Compra por día</p>
+          </div>
+          <TrendingUp className="text-green-600" size={24} />
+        </div>
+        <button onClick={() => setShowModalGananciaNeta(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          <Eye size={20} />Ver Reporte
+        </button>
+      </div>
+    </>
+  )}
 
 </div>
-  </div>
+</div>
 )}
 
 {/* MODAL: Stock General */}
@@ -3694,7 +3695,7 @@ return {
                     setNewTallaInput('');
                   }
                 }}
-                className="w-80 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                className="w-75 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                 placeholder="Ej: S, M, 28, ST, UNICO..."
               />
               <button
@@ -3766,7 +3767,7 @@ return {
                     addColorToProduct(editingProduct || newProduct);
                   }
                 }}
-                className="w-80 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                className="w-75 px-3 py-2.5 border border-gray-200 rounded-xl text-2xl focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                 placeholder="Ej: Negro, Azul Marino, Verde Olivo..."
               />
               <button
