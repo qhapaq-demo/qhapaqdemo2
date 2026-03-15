@@ -485,6 +485,62 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
         </div>
       </div>
 
+      {/* ── PERMISOS DE VENDEDOR ─────────────────────────────── */}
+<div className="bg-white p-6 rounded-2xl shadow-sm border">
+  <div className="flex items-center gap-3 mb-6">
+    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+      <ShieldCheck size={20} className="text-green-600" />
+    </div>
+    <div>
+      <h2 className="text-2xl font-bold">Permisos de Vendedor</h2>
+      <p className="text-gray-500 text-base">Define qué puede ver y hacer tu vendedor</p>
+    </div>
+  </div>
+
+  <div className="space-y-3">
+    {[
+      { key: 'ver_dashboard',     label: 'Ver Dashboard',              desc: 'Pantalla principal con resumen del día' },
+      { key: 'ver_productos',     label: 'Ver Productos',              desc: 'Lista de productos del catálogo' },
+      { key: 'crear_producto',    label: 'Crear Producto',             desc: 'Agregar nuevos productos' },
+      { key: 'agregar_stock',     label: 'Agregar / Corregir Stock',   desc: 'Ingresos positivos y negativos' },
+      { key: 'liquidar_stock',    label: 'Liquidar Stock',             desc: 'Poner en cero el stock de un producto' },
+      { key: 'eliminar_stock',    label: 'Eliminar movimiento Stock',  desc: 'Borrar ingresos registrados' },
+      { key: 'eliminar_venta',    label: 'Eliminar Venta',             desc: 'Borrar ventas del día' },
+      { key: 'ver_backup',        label: 'Ver Backup',                 desc: 'Exportar datos del sistema' },
+      { key: 'ver_reportes',      label: 'Ver Reportes completos',     desc: 'Reporte ventas, análisis y ganancia neta' },
+      { key: 'ver_configuracion', label: 'Ver Configuración',          desc: 'Acceso al panel de configuración' },
+    ].map(({ key, label, desc }) => (
+      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border">
+        <div>
+          <p className="font-medium text-base">{label}</p>
+          <p className="text-xs text-gray-400">{desc}</p>
+        </div>
+        <button
+          onClick={() => {
+            const nuevosPermisos = {
+              ...config.permisos_vendedor,
+              [key]: !config.permisos_vendedor?.[key]
+            };
+            setConfig({ ...config, permisos_vendedor: nuevosPermisos });
+          }}
+          className={`relative w-12 h-6 rounded-full transition-colors ${
+            config.permisos_vendedor?.[key] ? 'bg-green-500' : 'bg-gray-300'
+          }`}
+        >
+          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${
+            config.permisos_vendedor?.[key] ? 'left-7' : 'left-1'
+          }`} />
+        </button>
+      </div>
+    ))}
+  </div>
+
+  <button onClick={guardarConfig} disabled={guardando}
+    className="mt-6 flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg text-base font-medium hover:bg-green-700 transition-colors disabled:opacity-50">
+    {guardado ? <><CheckCircle size={16} /> ¡Guardado!</> : guardando ? 'Guardando...' : <><Save size={16} /> Guardar Permisos</>}
+  </button>
+</div>
+
       {/* ── SOPORTE ────────────────────────────────────────────── */}
       <div className="bg-white p-6 rounded-xl shadow-sm border">
         <div className="flex items-center gap-3 mb-6">

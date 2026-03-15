@@ -50,6 +50,7 @@ function App() {
   const [productoALiquidar, setProductoALiquidar] = useState(null);
   const [showModalGananciaNeta, setShowModalGananciaNeta] = useState(false);
   const [userRol, setUserRol] = useState(null);
+  const [permisos, setPermisos] = useState({});
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -285,6 +286,17 @@ useEffect(() => {
       .eq('auth_id', session.user.id)
       .single();
     setUserRol(usuarioApp?.rol || 'vendedor1');
+
+    const { data: configData } = await supabase
+      .from('configuracion')
+      .select('permisos_vendedor')
+      .limit(1)
+      .single();
+    if (usuarioApp?.rol !== 'admin') {
+      setPermisos(configData?.permisos_vendedor || {});
+    } else {
+      setPermisos({});
+    }
 
     const tabsPermitidos = ['inventario', 'ventas', 'reportes'];
     const tabGuardado = localStorage.getItem('abermud-active-tab');
@@ -1816,7 +1828,7 @@ return {
       
       {/* Logo clickeable - vuelve al Dashboard */}
       <button 
-        onClick={() => setActiveTab(userRol === 'admin' ? 'dashboard' : 'inventario')}
+        onClick={() => setActiveTab(userRol === 'admin' || permisos?.ver_dashboard ? 'dashboard' : 'inventario')}
         className="flex items-center gap-3 hover:opacity-80 transition-opacity"
       >
         <img 
@@ -1887,7 +1899,15 @@ return {
   { id: 'backup',         icon: Download,          label: 'Backup',         soloAdmin: true  },
   { id: 'configuracion',  icon: Settings,          label: 'Configuración',  soloAdmin: true  },
 ]
-.filter(tab => !tab.soloAdmin || userRol === 'admin')
+.filter(tab => {
+  if (!tab.soloAdmin) return true;
+  if (userRol === 'admin') return true;
+  if (tab.id === 'dashboard' && permisos?.ver_dashboard) return true;
+  if (tab.id === 'productos' && permisos?.ver_productos) return true;
+  if (tab.id === 'backup' && permisos?.ver_backup) return true;
+  if (tab.id === 'configuracion' && permisos?.ver_configuracion) return true;
+  return false;
+})
 .map(tab => (
   <button
     key={tab.id}
@@ -2370,7 +2390,7 @@ return {
     {/* Header */}
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
       <h2 className="text-2xl font-bold text-gray-900">Inventario</h2>
-      {userRol === 'admin' && (
+      {(userRol === 'admin' || permisos?.agregar_stock) && (
   <button
     onClick={() => setShowAddStock(true)}
     className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
@@ -3081,7 +3101,7 @@ return {
         <p className="text-xs text-gray-400 mt-0.5">{ventasFiltradas.length} pedidos</p>
       </div>
       {/* Solo admin */}
-      {userRol === 'admin' && (
+      {(userRol === 'admin' || permisos?.ver_reportes) && (
         <div className="flex-1 px-4 py-3">
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Ganancia neta</p>
           <p className="text-xl font-bold text-blue-600">S/ {totalGanancia.toFixed(2)}</p>
@@ -3240,7 +3260,7 @@ return {
     </button>
   </div>
 
-  {userRol === 'admin' && (
+  {(userRol === 'admin' || permisos?.ver_reportes) && (
     <>
       {/* Tarjeta 3: Reporte de Ventas */}
       <div className="p-6 rounded-xl shadow-sm border bg-gradient-to-br from-emerald-100 to-white">
