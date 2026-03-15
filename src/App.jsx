@@ -284,11 +284,11 @@ useEffect(() => {
       .select('rol')
       .eq('auth_id', session.user.id)
       .single();
-    setUserRol(usuarioApp?.rol || 'vendedor');
+    setUserRol(usuarioApp?.rol || 'vendedor1');
 
     const tabsPermitidos = ['inventario', 'ventas', 'reportes'];
     const tabGuardado = localStorage.getItem('abermud-active-tab');
-    if (usuarioApp?.rol === 'vendedor' && !tabsPermitidos.includes(tabGuardado)) {
+    if (usuarioApp?.rol === 'vendedor1' && !tabsPermitidos.includes(tabGuardado)) {
       setActiveTab('inventario');
     }
   }
