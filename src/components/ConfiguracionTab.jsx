@@ -33,7 +33,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   // ── Usuarios ──────────────────────────────────────────────────
   const [usuarios,     setUsuarios]     = useState([]);
   const [showAddUser,  setShowAddUser]  = useState(false);
-  const [nuevoUser,    setNuevoUser]    = useState({ email: '', password: '', rol: 'vendedor' });
+  const [nuevoUser,    setNuevoUser]    = useState({ email: '', password: '', rol: 'vendedor1' });
   const [showNewPwd,   setShowNewPwd]   = useState(false);
   const [userMsg,      setUserMsg]      = useState(null);
   const [loadingUser,  setLoadingUser]  = useState(false);
@@ -107,7 +107,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
       if (authError) throw new Error(authError.message);
       const { error: dbError } = await supabase.from('usuarios_app').insert({ auth_id: authData.user?.id, email: nuevoUser.email, rol: nuevoUser.rol, activo: true, created_at: new Date().toISOString() });
       if (dbError) throw new Error(dbError.message);
-      setNuevoUser({ email: '', password: '', rol: 'vendedor' }); setShowAddUser(false);
+      setNuevoUser({ email: '', password: '', rol: 'vendedor1' }); setShowAddUser(false);
       setUserMsg({ tipo: 'ok', texto: '✅ Usuario creado. Recibirá un email de confirmación.' });
       await cargarUsuarios();
       setTimeout(() => setUserMsg(null), 4000);
@@ -141,7 +141,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
 
   const ROL_BADGE = {
     admin:    { label: 'Administrador', bg: 'bg-black text-white' },
-    vendedor: { label: 'Vendedor',      bg: 'bg-gray-200 text-gray-700' },
+    vendedor1: { label: 'Vendedor1',      bg: 'bg-gray-200 text-gray-700' },
   };
   const msgStyle = (tipo) => tipo === 'ok' ? 'text-green-600' : 'text-red-600';
 
@@ -333,7 +333,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
         <div className="space-y-3 mb-4">
           {usuarios.length === 0 && <p className="text-gray-400 text-sm text-center py-4">No hay usuarios registrados aún.</p>}
           {usuarios.map((u) => {
-            const badge = ROL_BADGE[u.rol] || ROL_BADGE.vendedor;
+            const badge = ROL_BADGE[u.rol] || ROL_BADGE.vendedor1;
             return (
               <div key={u.id} className={`p-4 rounded-xl border ${u.activo ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200 opacity-60'}`}>
                 <div className="flex items-center justify-between">
@@ -349,7 +349,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
                   </div>
                   {u.activo && (
                     <div className="flex items-center gap-2">
-                      {u.rol === 'vendedor' && (
+                      {u.rol === 'vendedor1' && (
                         <button onClick={() => { setResetPwdUser(resetPwdUser?.id === u.id ? null : u); setResetMsg(null); }} title="Enviar recuperación de contraseña"
                           className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                           <KeyRound size={15} />
@@ -396,7 +396,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">Rol</label>
                 <select value={nuevoUser.rol} onChange={(e) => setNuevoUser({ ...nuevoUser, rol: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-indigo-400">
-                  <option value="vendedor">Vendedor — acceso básico</option>
+                  <option value="vendedor1">Vendedor1 — acceso básico</option>
                   <option value="admin">Administrador — acceso completo</option>
                 </select>
               </div>
@@ -414,7 +414,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
               <button onClick={crearUsuario} disabled={loadingUser} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-base font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50">
                 <UserPlus size={15} /> {loadingUser ? 'Creando...' : 'Crear usuario'}
               </button>
-              <button onClick={() => { setShowAddUser(false); setNuevoUser({ email: '', password: '', rol: 'vendedor' }); }} className="px-4 py-2 border border-gray-200 rounded-lg text-base text-gray-600 hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => { setShowAddUser(false); setNuevoUser({ email: '', password: '', rol: 'vendedor1' }); }} className="px-4 py-2 border border-gray-200 rounded-lg text-base text-gray-600 hover:bg-gray-50">Cancelar</button>
             </div>
           </div>
         )}
