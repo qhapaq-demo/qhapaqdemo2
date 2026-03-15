@@ -21,13 +21,17 @@ const CatalogoProducto = () => {
     .eq('id', productId)
     .single();
 
+  const { data: swatches } = await supabase
+    .from('color_swatches')
+    .select('*')
+    .eq('modelo', prod?.modelo);
+
   const { data: configData } = await supabase
     .from('configuracion')
     .select('*')
     .limit(1)
     .single();
 
-  // Agrupar colores por talla desde product.stock directamente
   const tallas = prod?.tallas?.length ? prod.tallas : ['S', 'M', 'L', 'XL'];
   const porTalla = {};
   tallas.forEach(talla => {
@@ -35,14 +39,14 @@ const CatalogoProducto = () => {
     (prod?.colors || []).forEach(color => {
       const cantidad = prod?.stock?.[color]?.[talla] || 0;
       if (cantidad > 0) {
-        const rawUrl = prod?.imagenes_colores?.[color] || null;
-        const imageUrl = rawUrl 
-          ? rawUrl.replace('/upload/', '/upload/w_80,h_80,c_fill,q_auto,f_auto/')
-          : null;
+        // Buscar imagen en imagenes_colores primero, luego en swatches
+        const imageUrl = prod?.imagenes_colores?.[color] 
+          || swatches?.find(s => s.color_name?.toLowerCase() === color.toLowerCase())?.image_url 
+          || null;
         porTalla[talla].push({ color, image_url: imageUrl });
       }
     });
-  });
+  });  
 
   setProducto(prod);
   setStockPorTalla(porTalla);
@@ -115,7 +119,7 @@ const CatalogoProducto = () => {
                                   <img
                                     src={item.image_url}
                                     alt={item.color}
-                                    loading="lazy"
+                                    loading="eager"
                                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
                                     className="w-10 h-10 object-cover rounded flex-shrink-0"
                                   />
