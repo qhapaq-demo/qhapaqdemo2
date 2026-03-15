@@ -35,7 +35,10 @@ const CatalogoProducto = () => {
     (prod?.colors || []).forEach(color => {
       const cantidad = prod?.stock?.[color]?.[talla] || 0;
       if (cantidad > 0) {
-        const imageUrl = prod?.imagenes_colores?.[color] || null;
+        const rawUrl = prod?.imagenes_colores?.[color] || null;
+        const imageUrl = rawUrl 
+          ? rawUrl.replace('/upload/', '/upload/w_80,h_80,c_fill,q_auto,f_auto/')
+          : null;
         porTalla[talla].push({ color, image_url: imageUrl });
       }
     });
@@ -108,12 +111,16 @@ const CatalogoProducto = () => {
                           {stockPorTalla[talla].map((item, i) => (
                             <div key={i} className="flex items-center gap-1 bg-white border rounded p-1">
                               {item.image_url ? (
-                                <img
-                                  src={item.image_url}
-                                  alt={item.color}
-                                  loading="lazy"
-                                  className="w-10 h-10 object-cover rounded flex-shrink-0"
-                                />
+                                <>
+                                  <img
+                                    src={item.image_url}
+                                    alt={item.color}
+                                    loading="lazy"
+                                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                                    className="w-10 h-10 object-cover rounded flex-shrink-0"
+                                  />
+                                  <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0 hidden" />
+                                </>
                               ) : (
                                 <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
                               )}

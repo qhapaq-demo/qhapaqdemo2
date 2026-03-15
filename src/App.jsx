@@ -10,7 +10,8 @@ import {
   BarChart2,
   ClipboardList,
   Warehouse,
-  ClipboardListIcon
+  ClipboardListIcon,
+  LogOut
 } from 'lucide-react';
 import { supabase, getPeruDateTime } from './supabaseConfig';
 
@@ -1898,6 +1899,18 @@ return {
     <span>{tab.label}</span>
   </button>
 ))}
+
+{/* Botón cerrar sesión */}
+<button
+  onClick={async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  }}
+  className="flex items-center gap-2 px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-all mt-2 border-t"
+>
+  <LogOut size={20} />
+  <span>Cerrar sesión</span>
+</button>
           </div>
         </div>
       </nav>
