@@ -51,6 +51,7 @@ function App() {
   const [showModalGananciaNeta, setShowModalGananciaNeta] = useState(false);
   const [userRol, setUserRol] = useState(null);
   const [permisos, setPermisos] = useState({});
+  const [userName, setUserName] = useState('');
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -282,10 +283,11 @@ useEffect(() => {
   if (session?.user?.id) {
     const { data: usuarioApp } = await supabase
       .from('usuarios_app')
-      .select('rol')
+      .select('rol, nombre, email')
       .eq('auth_id', session.user.id)
       .single();
     setUserRol(usuarioApp?.rol || 'vendedor1');
+    setUserName(usuarioApp?.nombre || usuarioApp?.email?.split('@')[0] || 'usuario');
 
     const { data: configData } = await supabase
       .from('configuracion')
@@ -778,7 +780,8 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
         cantidad: cantidadInt,
         notes: cantidadInt < 0
           ? `⚠️ Corrección: ${cantidadInt}`
-          : 'Ingreso manual de stock'
+          : 'Ingreso manual de stock',
+        usuario: userName
       });
 
       updatedStock[color][talla] = (updatedStock[color][talla] || 0) + cantidadInt;
@@ -929,8 +932,12 @@ const getStockDetailByDate = (fecha, modelo) => {
   });
 
   const operaciones = Object.entries(operacionesPorHora)
-    .sort(([horaA], [horaB]) => horaA.localeCompare(horaB))
-    .map(([hora, items]) => ({ hora, items }));
+  .sort(([horaA], [horaB]) => horaA.localeCompare(horaB))
+  .map(([hora, items]) => ({ 
+    hora, 
+    items,
+    usuario: transactions.find(t => t.hora === hora)?.usuario || ''
+  }));
 
   const total = transactions.reduce((sum, t) => sum + t.cantidad, 0);
   const esCorreccion = transactions.some(t => t.cantidad < 0);
@@ -4200,7 +4207,7 @@ return {
       return (
   <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
     <div className="flex items-center justify-between mb-1">
-      <p className="text-base text-gray-500">{operacion.hora}</p>
+      <p className="text-base text-gray-500">{operacion.hora} · {operacion.usuario || ''}</p>
       <button
         onClick={async () => {
           const pin = prompt('Ingresa el PIN de administrador:');
