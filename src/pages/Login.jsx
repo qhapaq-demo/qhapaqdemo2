@@ -5,16 +5,16 @@ import logoAbermud from '../logo_Abermud.jpg';
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email,        setEmail]        = useState('');
+  const [usuario,      setUsuario]      = useState('');
   const [password,     setPassword]     = useState('');
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Recuperar contraseña
-  const [showRecuperar, setShowRecuperar] = useState(false);
-  const [emailRecuperar, setEmailRecuperar] = useState('');
-  const [recuperarMsg,   setRecuperarMsg]   = useState(null);
+  const [showRecuperar,    setShowRecuperar]    = useState(false);
+  const [emailRecuperar,   setEmailRecuperar]   = useState('');
+  const [recuperarMsg,     setRecuperarMsg]     = useState(null);
   const [loadingRecuperar, setLoadingRecuperar] = useState(false);
 
   const handleLogin = async (e) => {
@@ -22,10 +22,32 @@ const Login = () => {
     setLoading(true);
     setError('');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Buscar email por nombre de usuario
+    const { data: usuarioApp, error: buscarError } = await supabase
+      .from('usuarios_app')
+      .select('email, activo')
+      .eq('nombre', usuario.trim())
+      .single();
 
-    if (error) {
-      setError('Email o contraseña incorrectos');
+    if (buscarError || !usuarioApp) {
+      setError('Usuario no encontrado');
+      setLoading(false);
+      return;
+    }
+
+    if (!usuarioApp.activo) {
+      setError('Usuario desactivado. Contacta al administrador.');
+      setLoading(false);
+      return;
+    }
+
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: usuarioApp.email,
+      password
+    });
+
+    if (loginError) {
+      setError('Contraseña incorrecta');
       setLoading(false);
       return;
     }
@@ -57,11 +79,7 @@ const Login = () => {
 
         {/* LOGO */}
         <div className="text-center mb-8">
-          <img
-            src={logoAbermud}
-            alt="Abermud"
-            className="w-60 h-60 object-contain mx-auto mb-3"
-          />
+          <img src={logoAbermud} alt="Abermud" className="w-60 h-60 object-contain mx-auto mb-3" />
           <h1 className="text-4xl font-bold text-gray-900">Abermud</h1>
           <p className="text-base text-gray-400 mt-1 tracking-widest">QHAPAQ</p>
         </div>
@@ -71,12 +89,12 @@ const Login = () => {
           <>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-xl font-medium text-gray-700 mb-1 block">Email</label>
+                <label className="text-xl font-medium text-gray-700 mb-1 block">Usuario</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@email.com"
+                  type="text"
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
+                  placeholder="Ej: Admin, Vendedor 1"
                   required
                   className="w-full border border-gray-200 rounded-xl px-4 py-4 text-xl focus:outline-none focus:border-gray-400"
                 />
@@ -118,7 +136,6 @@ const Login = () => {
               </button>
             </form>
 
-            {/* Olvidé mi contraseña */}
             <button
               onClick={() => { setShowRecuperar(true); setError(''); }}
               className="w-full text-center text-sm text-gray-400 hover:text-gray-600 mt-4 transition-colors"
@@ -127,13 +144,10 @@ const Login = () => {
             </button>
           </>
         ) : (
-          /* ── FORMULARIO RECUPERAR ── */
           <>
             <div className="mb-4">
               <h2 className="text-xl font-bold text-gray-800">Recuperar contraseña</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Ingresa tu email y te enviaremos un enlace para restablecerla.
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Ingresa tu email y te enviaremos un enlace para restablecerla.</p>
             </div>
 
             <form onSubmit={handleRecuperar} className="space-y-4">
@@ -151,9 +165,7 @@ const Login = () => {
 
               {recuperarMsg && (
                 <div className={`rounded-xl p-3 border ${recuperarMsg.tipo === 'ok' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                  <p className={`text-sm text-center ${recuperarMsg.tipo === 'ok' ? 'text-green-700' : 'text-red-600'}`}>
-                    {recuperarMsg.texto}
-                  </p>
+                  <p className={`text-sm text-center ${recuperarMsg.tipo === 'ok' ? 'text-green-700' : 'text-red-600'}`}>{recuperarMsg.texto}</p>
                 </div>
               )}
 
@@ -175,9 +187,7 @@ const Login = () => {
           </>
         )}
 
-        <p className="text-center text-base text-gray-300 mt-6 tracking-widest">
-          Powered by QHAPAQ
-        </p>
+        <p className="text-center text-base text-gray-300 mt-6 tracking-widest">Powered by QHAPAQ</p>
       </div>
     </div>
   );
