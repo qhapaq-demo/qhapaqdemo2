@@ -973,37 +973,16 @@ const getStockDetailByDate = (fecha, modelo) => {
   };
 
   const getStockALaFechaReport = () => {
-    const stockByModel = {};
-    const today = getPeruDateTime().fecha;
-
-    products.filter(p => p.activo !== false).forEach(product => {
-      const ultimaLiquidacion = stockTransactions
-        .filter(t => t.tipo === 'LIQUIDACION' && t.modelo === product.modelo)
-        .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora))
-        .at(0);
-
-      const fechaInicio = ultimaLiquidacion ? ultimaLiquidacion.fecha : '2000-01-01';
-
-      // ✅ DESPUÉS — incluye correcciones negativas
-const ingresos = stockTransactions
-  .filter(t => 
-    (t.tipo === 'INGRESO' || t.tipo === 'CORRECCION') && 
-    t.modelo === product.modelo && 
-    t.fecha >= fechaInicio
-  )
-  .reduce((sum, t) => sum + t.cantidad, 0);
-
-      const ventas = sales
-        .filter(s => s.fecha >= fechaInicio && s.fecha <= today)
-        .reduce((sum, sale) => sum + sale.items
-          .filter(item => item.modelo === product.modelo)
-          .reduce((s, item) => s + item.quantity, 0), 0);
-
-      stockByModel[product.modelo] = ingresos - ventas;
+  const stockByModel = {};
+  products.filter(p => p.activo !== false).forEach(product => {
+    let total = 0;
+    Object.values(product.stock || {}).forEach(tallas => {
+      Object.values(tallas).forEach(cantidad => total += cantidad);
     });
-
-    return stockByModel;
-  };
+    stockByModel[product.modelo] = total;
+  });
+  return stockByModel;
+};
   
 // ============================================
 // FUNCIONES AUXILIARES
