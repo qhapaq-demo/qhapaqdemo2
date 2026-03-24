@@ -4,13 +4,14 @@
   "description": "Sistema de Gestion de Inventario",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F3F4F6",
+  "background_color": "#ffffff",
   "theme_color": "#172554",
   "icons": [
     {
       "src": "/logo_Qhapaq_circular.png",
       "sizes": "any",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

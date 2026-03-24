@@ -1152,34 +1152,44 @@ const getStockALaFechaReport = () => {
 const downloadOrderNote = (sale) => {
   const doc = new jsPDF();
   
-  // Logo
-  try {
-  doc.addImage(logoQhapaq, 'JPEG', 5, 5, 60, 30);
+  // Logo izquierda
+try {
+  doc.addImage(logoQhapaq, 'JPEG', 5, 5, 55, 28);
 } catch (e) {}
 
+// Nombre negocio arriba derecha
 doc.setFontSize(10);
 doc.setFont(undefined, 'normal');
-doc.text(config?.nombre_negocio || 'Qhapaq', 200, 15, { align: 'right' });
+doc.text(config?.nombre_negocio || 'Qhapaq', 200, 12, { align: 'right' });
 
-doc.setFontSize(14);
+// Línea separadora
+doc.setDrawColor(0);
+doc.setLineWidth(0.5);
+doc.line(5, 36, 205, 36);
+
+// Título centrado
+doc.setFontSize(13);
 doc.setFont(undefined, 'bold');
-doc.text('NOTA DE PEDIDO', 105, 42, { align: 'center' });
+doc.text('NOTA DE PEDIDO', 105, 44, { align: 'center' });
 
-  // Información del pedido
-  doc.setFontSize(10);
-  doc.setFont(undefined, 'bold');
-  doc.text(`Pedido N° ${sale.order_number}`, 15, 70);
-  doc.setFont(undefined, 'normal');
-  doc.text(`Fecha: ${sale.fecha.split('-').reverse().join('/')}`, 15, 57);
-  
-  // Información del cliente
-  doc.setFont(undefined, 'bold');
-  doc.text('CLIENTE:', 15, 67);
-  doc.setFont(undefined, 'normal');
-  doc.text(sale.client_name, 15, 74);
-  
-  const clientData = clients.find(c => c.nombre === sale.client_name);
-  let currentY = 81;
+// Segunda línea separadora
+doc.line(5, 48, 205, 48);
+
+// Datos del pedido
+doc.setFontSize(10);
+doc.setFont(undefined, 'bold');
+doc.text(`Pedido N° ${sale.order_number}`, 15, 56);
+doc.setFont(undefined, 'normal');
+doc.text(`Fecha: ${sale.fecha.split('-').reverse().join('/')}`, 15, 63);
+
+// Cliente
+doc.setFont(undefined, 'bold');
+doc.text('CLIENTE:', 15, 73);
+doc.setFont(undefined, 'normal');
+doc.text(sale.client_name, 15, 80);
+
+const clientData = clients.find(c => c.nombre === sale.client_name);
+let currentY = 87;
   
   if (clientData) {
     if (clientData.dni) {
@@ -1956,10 +1966,11 @@ const getStockClientesReport = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER */}
-<header className="sticky top-0 z-40 border-b border-[#D4B896]" style={{backgroundColor: '#F3F4F6'}}>  <div className="max-w-7xl mx-auto px-4 py-2">
-    <div className="flex items-center justify-between">
-      <button 
+    {/* HEADER */}
+    <header className="sticky top-0 z-40 border-b border-blue-950 shadow-sm" style={{backgroundColor: '#F3F4F6'}}>
+    <div className="max-w-7xl mx-auto px-4 py-2">
+      <div className="flex items-center justify-between">
+        <button 
         onClick={() => setActiveTab(userRol === 'admin' || permisos?.ver_dashboard ? 'dashboard' : 'inventario')}
         className="flex flex-col items-start hover:opacity-80 transition-opacity"
       >
@@ -1986,7 +1997,7 @@ const getStockClientesReport = () => {
       {/* NAVIGATION */}
       <nav className={`
   ${mobileMenuOpen ? 'block' : 'hidden'} 
-  md:block border-b border-[#D4B896] sticky z-30
+  md:block border-b border-blue-950 sticky z-30
 `} style={{top: '72px', backgroundColor: '#F3F4F6'}}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-1 text-lg">
