@@ -207,7 +207,7 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   const pageWidth = doc.internal.pageSize.width;
 
   // Logo más abajo
-  doc.addImage(logoQhapaq, 'JPEG', 14, 24, 26, 26);
+  doc.addImage(logoQhapaq, 'JPEG', 14, 10, 60, 30);
 
   // Nombre + slogan
   doc.setFontSize(18);
@@ -215,7 +215,6 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   doc.text('Qhapaq', 45, 35);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'italic');
-  doc.text('Lo bueno va contigo', 45, 40);
 
   // Título centrado debajo del logo
   doc.setFontSize(16);
@@ -1155,28 +1154,21 @@ const downloadOrderNote = (sale) => {
   
   // Logo
   try {
-    doc.addImage(logoQhapaq, 'JPEG', 15, 10, 30, 30);
-  } catch (e) {
-    console.log('Logo no disponible');
-  }
+  doc.addImage(logoQhapaq, 'JPEG', 5, 5, 60, 30);
+} catch (e) {}
 
-  // Encabezado CENTRADO debajo del logo
-  doc.setFontSize(20);
-  doc.setFont(undefined, 'bold');
-  doc.text('Qhapaq', 105, 20, { align: 'center' });
-  
-  doc.setFontSize(10);
-  doc.setFont(undefined, 'normal');
-  doc.text('Lo bueno va contigo', 105, 27, { align: 'center' });
-  
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
-  doc.text('NOTA DE PEDIDO', 105, 40, { align: 'center' });
+doc.setFontSize(10);
+doc.setFont(undefined, 'normal');
+doc.text(config?.nombre_negocio || 'Qhapaq', 200, 15, { align: 'right' });
+
+doc.setFontSize(14);
+doc.setFont(undefined, 'bold');
+doc.text('NOTA DE PEDIDO', 105, 42, { align: 'center' });
 
   // Información del pedido
   doc.setFontSize(10);
   doc.setFont(undefined, 'bold');
-  doc.text(`Pedido N° ${sale.order_number}`, 15, 50);
+  doc.text(`Pedido N° ${sale.order_number}`, 15, 70);
   doc.setFont(undefined, 'normal');
   doc.text(`Fecha: ${sale.fecha.split('-').reverse().join('/')}`, 15, 57);
   
@@ -5488,7 +5480,7 @@ comprado += compra * (item.quantity || 0);
 
 {/* MODAL: Ver Venta */}
 {viewingSale && (
-  <div className="fixed inset-0 bg-blue-950/70 backdrop-blur-base flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-900/20 backdrop-blur-base flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Detalle de Venta</h2>
