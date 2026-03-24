@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, Users, ShoppingCart, TrendingUp, DollarSign, 
   AlertCircle, Plus, Edit2, Trash2, Search, X, Download,
@@ -16,7 +16,7 @@ import {
 import { supabase, getPeruDateTime } from './supabaseConfig';
 
 // Logo placeholder (ajusta la ruta según tu proyecto)
-import logoABermud from './logo_Abermud.jpg';
+import logoQhapaq from './logo_Qhapaq.png';
 
 import UploadFoto from "./components/UploadFoto";
 import ConfiguracionTab from "./components/ConfiguracionTab";
@@ -30,7 +30,7 @@ function App() {
   // Estados principales
   const [activeTab, setActiveTab] = useState(() => {
   // Recuperar pestaña guardada al cargar la app
-  const savedTab = localStorage.getItem('abermud-active-tab');
+  const savedTab = localStorage.getItem('Qhapaq-active-tab');
   return savedTab || 'dashboard';
 });
   const [products, setProducts] = useState([]);
@@ -44,7 +44,9 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showStockDetail, setShowStockDetail] = useState(false);
   const [stockDetailData, setStockDetailData] = useState(null);
-  const [colorSwatches, setColorSwatches] = useState([]);  
+  const [colorSwatches, setColorSwatches] = useState([]); 
+  const [configVenc, setConfigVenc] = useState(null); 
+  const [mostrarResetAuto, setMostrarResetAuto] = useState(false);
   const [pinLiquidar, setPinLiquidar] = useState('');
   const [showPinLiquidar, setShowPinLiquidar] = useState(false);
   const [productoALiquidar, setProductoALiquidar] = useState(null);
@@ -52,6 +54,9 @@ function App() {
   const [userRol, setUserRol] = useState(null);
   const [permisos, setPermisos] = useState({});
   const [userName, setUserName] = useState('');
+  const [stockGlobal, setStockGlobal] = useState({});
+  const [stockMensualData, setStockMensualData] = useState([]);
+  const [config, setConfig] = useState(null);
 
   // Estados para modales
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -66,6 +71,9 @@ function App() {
   const [saleConfirmData, setSaleConfirmData] = useState(null);
   const [ventaPorCobrar, setVentaPorCobrar] = useState('');
   const [showDeleteProduct, setShowDeleteProduct] = useState(null);
+  const [showVentaDetail, setShowVentaDetail] = useState(false);
+  const [ventaDetailData, setVentaDetailData] = useState(null);
+  const [isAjusteInventario, setIsAjusteInventario] = useState(false);
 
   // Estados para modales de reportes
   const [showModalStockGeneral, setShowModalStockGeneral] = useState(false);
@@ -74,6 +82,8 @@ function App() {
   const [showModalAnalisisVentas, setShowModalAnalisisVentas] = useState(false);
   const [vistaReporteVentas, setVistaReporteVentas] = useState('lista');
   const [fechaSeleccionadaVentas, setFechaSeleccionadaVentas] = useState(null);
+  const [searchStockGeneral, setSearchStockGeneral] = useState('');
+  const [searchStockClientes, setSearchStockClientes] = useState('');
 
   // Estados para productos
   const [newProduct, setNewProduct] = useState({
@@ -145,6 +155,10 @@ useEffect(() => {
   return () => window.removeEventListener('popstate', handlePopState);
 }, []);
 
+useEffect(() => {
+  setStockGlobal(calcularStockDesdeTransacciones());
+}, [stockTransactions]);
+
   // ============================================
   // FUNCIÓN PARA ABREVIAR NOMBRES DE PRODUCTOS
   // ============================================
@@ -193,12 +207,12 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   const pageWidth = doc.internal.pageSize.width;
 
   // Logo más abajo
-  doc.addImage(logoABermud, 'JPEG', 14, 24, 26, 26);
+  doc.addImage(logoQhapaq, 'JPEG', 14, 24, 26, 26);
 
   // Nombre + slogan
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('ABermud', 45, 35);
+  doc.text('Qhapaq', 45, 35);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'italic');
   doc.text('Lo bueno va contigo', 45, 40);
@@ -272,7 +286,7 @@ const agregarEncabezadoPDF = (doc, titulo) => {
   }, []);
   // Guardar pestaña activa en localStorage
 useEffect(() => {
-  localStorage.setItem('abermud-active-tab', activeTab);
+  localStorage.setItem('Qhapaq-active-tab', activeTab);
 }, [activeTab]);
 
   const loadAllData = async () => {
@@ -291,7 +305,7 @@ useEffect(() => {
 
     const { data: configData } = await supabase
       .from('configuracion')
-      .select('permisos_vendedor')
+      .select('permisos_vendedor, fecha_vencimiento, activo, fecha_inicio')
       .limit(1)
       .single();
     if (usuarioApp?.rol !== 'admin') {
@@ -300,19 +314,32 @@ useEffect(() => {
       setPermisos({});
     }
 
+    setConfigVenc({ fecha_vencimiento: configData?.fecha_vencimiento, activo: configData?.activo, fecha_inicio: configData?.fecha_inicio });
+    setConfig(configData);
+
+setMostrarResetAuto(
+  stockTransactions.length >= 2000 || (() => {
+    if (!configData?.fecha_inicio) return false;
+    const diaInicio = new Date(configData.fecha_inicio + 'T00:00:00').getDate();
+    const diaHoy = new Date().getDate();
+    return diaHoy >= (diaInicio - 3) && diaHoy < diaInicio;
+  })()
+);
+
     const tabsPermitidos = ['inventario', 'ventas', 'reportes'];
-    const tabGuardado = localStorage.getItem('abermud-active-tab');
+    const tabGuardado = localStorage.getItem('Qhapaq-active-tab');
     if (usuarioApp?.rol === 'vendedor1' && !tabsPermitidos.includes(tabGuardado)) {
       setActiveTab('inventario');
     }
   }
 
   await Promise.all([
-    loadProducts(),
-    loadClients(),
-    loadSales(),
-    loadStockTransactions()
-  ]);
+  loadProducts(),
+  loadClients(),
+  loadSales(),
+  loadStockTransactions(),
+  loadStockMensual()
+]);
   setLoading(false);
 };
 
@@ -359,7 +386,8 @@ useEffect(() => {
     const { data, error } = await supabase
       .from('stock_transactions')
       .select('*')
-      .order('fecha', { ascending: false });
+      .order('fecha', { ascending: false })
+      .limit(5000);
     
     if (error) {
       console.error('Error cargando transacciones de stock:', error);
@@ -373,6 +401,34 @@ useEffect(() => {
     .from('color_swatches')
     .select('*');
   if (!error) setColorSwatches(data);
+};
+
+const loadStockMensual = async () => {
+  const { data } = await supabase
+    .from('stock_mensual')
+    .select('*')
+    .order('mes', { ascending: true });
+  if (data) setStockMensualData(data);
+};
+
+const guardarSnapshotMensual = async () => {
+  const mes = getPeruDateTime().fecha.slice(0, 7);
+  const valorInventario = products.reduce((sum, p) => {
+    const precioCompra = p.precio_compra || 0;
+    const totalUnidades = Object.values(stockGlobal[p.modelo] || {})
+      .flatMap(tallas => Object.values(tallas))
+      .reduce((s, q) => s + (Number(q) || 0), 0);
+    return sum + (precioCompra * totalUnidades);
+  }, 0);
+  const totalUnidades = products.reduce((sum, p) => {
+    return sum + Object.values(stockGlobal[p.modelo] || {})
+      .flatMap(tallas => Object.values(tallas))
+      .reduce((s, q) => s + (Number(q) || 0), 0);
+  }, 0);
+  await supabase.from('stock_mensual')
+    .upsert({ mes, valor_inventario: valorInventario, total_unidades: totalUnidades },
+    { onConflict: 'mes' });
+  await loadStockMensual();
 };
 
 useEffect(() => {
@@ -599,7 +655,7 @@ const addColorToProduct = (productObj) => {
 
   const completeSale = async () => {
   if (cart.length === 0) { alert('El carrito está vacío'); return; }
-  if (!selectedClient) { alert('Por favor selecciona un cliente'); return; }
+  if (!isAjusteInventario && !selectedClient) { alert('Por favor selecciona un cliente'); return; }
   if (isProcessing) return;
 
   setIsProcessing(true);
@@ -623,8 +679,8 @@ const addColorToProduct = (productObj) => {
     const day = fecha.split('-')[2];
     const orderNumber = `${year}-${day}${month}-${consecutivo.toString().padStart(3, '0')}`;
     const totalCalculado = cart.reduce((sum, item) => sum + item.subtotal, 0);
-    const total = ventaPorCobrar ? parseFloat(ventaPorCobrar) : totalCalculado;
-    const descuento = totalCalculado - total;
+    const total = isAjusteInventario ? 0 : (ventaPorCobrar ? parseFloat(ventaPorCobrar) : totalCalculado);
+    const descuento = isAjusteInventario ? 0 : (totalCalculado - total);
 
     // 1. Crear la venta
     const { data: saleData, error: saleError } = await supabase
@@ -633,15 +689,16 @@ const addColorToProduct = (productObj) => {
         order_number: orderNumber,
         fecha: saleDate,
         hora: hora,
-        client_name: selectedClient.nombre,
-        client_dni: selectedClient.dni,
-        client_phone: selectedClient.telefono,
-        client_address: selectedClient.direccion,
-        client_department: selectedClient.departamento,
-        sales_channel: salesChannel,
+        client_name: isAjusteInventario ? 'SALIDA INVENTARIO' : selectedClient.nombre,
+        client_dni: isAjusteInventario ? null : selectedClient.dni,
+        client_phone: isAjusteInventario ? null : selectedClient.telefono,
+        client_address: isAjusteInventario ? null : selectedClient.direccion,
+        client_department: isAjusteInventario ? null : selectedClient.departamento,
+        sales_channel: isAjusteInventario ? 'AJUSTE' : salesChannel,
         items: cart,
         total: total,
-        descuento: descuento > 0 ? descuento : 0
+        descuento: descuento > 0 ? descuento : 0,
+        Vendedor: userName
       }]).select();
 
     if (saleError) throw new Error('Error al crear la venta: ' + saleError.message);
@@ -662,12 +719,12 @@ const addColorToProduct = (productObj) => {
         talla: item.talla,
         cantidad: item.quantity,
         sale_id: saleId,
-        notes: `Venta #${orderNumber}`
+        notes: isAjusteInventario ? 'SALIDA DE INVENTARIO' : `Venta #${orderNumber}`
       });
 
       const product = products.find(p => p.id === item.productoId);
       if (product) {
-        const updatedStock = { ...product.stock };
+        const updatedStock = JSON.parse(JSON.stringify(product.stock));
         updatedStock[item.color][item.talla] -= item.quantity;
         productUpdates.push({ id: product.id, stock: updatedStock });
       }
@@ -698,7 +755,7 @@ const addColorToProduct = (productObj) => {
     setSaleConfirmData({
       orderNumber,
       fecha: saleDate,
-      cliente: selectedClient.nombre,
+      cliente: isAjusteInventario ? 'SALIDA DE INVENTARIO' : selectedClient.nombre,
       canal: salesChannel,
       items: [...cart],
       total,
@@ -713,7 +770,7 @@ const addColorToProduct = (productObj) => {
     setSaleDate(getPeruDateTime().fecha);
     setSalesChannel('TIENDA');
     setShowSaleConfirm(true);
-    setVentaPorCobrar('');
+    setIsAjusteInventario(false);
 
   } catch (error) {
     console.error(error);
@@ -743,15 +800,31 @@ const addColorToProduct = (productObj) => {
   const { fecha: fechaAuto, hora } = getPeruDateTime();
   const fecha = stockFechaManual || fechaAuto;
   const stockTransactionsToInsert = [];
-  const updatedStock = { ...product.stock };
+  const updatedStock = JSON.parse(JSON.stringify(product.stock));
   const esCorreccion = false; // Ya no usamos toggle, detectamos por signo
 
-  // PRIMERO: Validar que ninguna quedará negativa
+  const todasLasCantidades = [];
+  Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
+    Object.entries(tallas).forEach(([talla, cantidad]) => {
+      const cantidadInt = parseInt(cantidad) || 0;
+      if (cantidadInt !== 0) todasLasCantidades.push(cantidadInt);
+    });
+  });
+  const tienePositivos = todasLasCantidades.some(c => c > 0);
+  const tieneNegativos = todasLasCantidades.some(c => c < 0);
+  if (tienePositivos && tieneNegativos) {
+    alert('❌ No podés mezclar ingresos (+) y correcciones (-) en la misma operación.\n\nHacé una operación por vez.');
+    setIsProcessing(false);
+    return;
+  }
+
+// PRIMERO: Validar que ninguna quedará negativa
+const stockCalculadoValidacion = calcularStockDesdeTransacciones();
 for (const [color, tallas] of Object.entries(stockToAdd.colors)) {
   for (const [talla, cantidad] of Object.entries(tallas)) {
     const cantidadInt = parseInt(cantidad) || 0;
     if (cantidadInt !== 0) {
-      const stockActual = product.stock?.[color]?.[talla] || 0;
+      const stockActual = stockCalculadoValidacion[product.modelo]?.[color]?.[talla] || 0;
       if (stockActual + cantidadInt < 0) {
         alert(`❌ ${color} ${talla}: Stock actual ${stockActual}, no puedes restar ${Math.abs(cantidadInt)}`);
         setIsProcessing(false);
@@ -773,7 +846,7 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
       stockTransactionsToInsert.push({
         fecha: fecha,
         hora: hora,
-        tipo: cantidadInt < 0 ? 'CORRECCION' : 'INGRESO',  // ← CAMBIO
+        tipo: 'INGRESO',
         modelo: product.modelo,
         color: color,
         talla: talla,
@@ -794,8 +867,6 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
     alert('No hay cantidades para agregar');
     return;
   }
-
-  console.log('Transacciones a insertar:', stockTransactionsToInsert);
 
   try {
   // 1. Insertar movimientos
@@ -848,23 +919,6 @@ Object.entries(stockToAdd.colors).forEach(([color, tallas]) => {
   // FUNCIONES DE REPORTES
   // ============================================
 
-const getPeruDateTime = () => {
-  const now = new Date();
-  const peruTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Lima' }));
-  
-  const year = peruTime.getFullYear();
-  const month = String(peruTime.getMonth() + 1).padStart(2, '0');
-  const day = String(peruTime.getDate()).padStart(2, '0');
-  const hours = String(peruTime.getHours()).padStart(2, '0');
-  const minutes = String(peruTime.getMinutes()).padStart(2, '0');
-  const seconds = String(peruTime.getSeconds()).padStart(2, '0');
-
-  return {
-    fecha: `${year}-${month}-${day}`,
-    hora: `${hours}:${minutes}:${seconds}`
-  };
-};
-  
   const getDateRangeForFilter = (filter) => {
     const today = getPeruDateTime().fecha;
     const todayDate = new Date(today);
@@ -889,35 +943,51 @@ const getPeruDateTime = () => {
   const getIngresoStockReport = () => {
   const { start, end } = getDateRangeForFilter(reportFilter);
 
-  const filteredTransactions = stockTransactions.filter(t => 
-    (t.tipo === 'INGRESO' || t.tipo === 'LIQUIDACION') &&
-    t.fecha >= start &&
-    t.fecha <= end
-  );
+  // Fecha+hora de última liquidación por producto
+  const ultimaLiquidacion = {};
+  stockTransactions
+    .filter(t => t.tipo === 'LIQUIDACION')
+    .forEach(t => {
+      const key = `${t.fecha}T${t.hora}`;
+      if (!ultimaLiquidacion[t.modelo] || key > ultimaLiquidacion[t.modelo]) {
+        ultimaLiquidacion[t.modelo] = key;
+      }
+    });
 
-  const grouped = {};
-  filteredTransactions.forEach(t => {
-    if (!grouped[t.fecha]) grouped[t.fecha] = {};
-    if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = { ingreso: 0, correccion: 0, liquidacion: 0 };
-    
-    if (t.tipo === 'LIQUIDACION') {
-      grouped[t.fecha][t.modelo].liquidacion += t.cantidad;
-    } else if (t.cantidad > 0) {
-      grouped[t.fecha][t.modelo].ingreso += t.cantidad;
-    } else if (t.cantidad < 0) {
-      grouped[t.fecha][t.modelo].correccion += t.cantidad;
+  const filteredTransactions = stockTransactions.filter(t => {
+    if (!(t.tipo === 'INGRESO' || t.tipo === 'LIQUIDACION' || t.tipo === 'REVERSION')) return false;
+    if (t.fecha < start || t.fecha > end) return false;
+    if (ultimaLiquidacion[t.modelo]) {
+      const tKey = `${t.fecha}T${t.hora}`;
+      if (tKey < ultimaLiquidacion[t.modelo]) return false;
     }
+    return true;
   });
 
-  return grouped;
+const grouped = {};
+filteredTransactions.forEach(t => {
+  if (!grouped[t.fecha]) grouped[t.fecha] = {};
+  if (!grouped[t.fecha][t.modelo]) grouped[t.fecha][t.modelo] = { ingreso: 0, correccion: 0, liquidacion: 0 };
+  
+  if (t.tipo === 'REVERSION') return; // aparece en historial pero NO suma
+  if (t.tipo === 'LIQUIDACION') {
+    grouped[t.fecha][t.modelo].liquidacion += t.cantidad;
+  } else if (t.cantidad > 0) {
+    grouped[t.fecha][t.modelo].ingreso += t.cantidad;
+  } else if (t.cantidad < 0) {
+    grouped[t.fecha][t.modelo].correccion += t.cantidad;
+  }
+});
+
+return grouped;
 };
 
 const getStockDetailByDate = (fecha, modelo) => {
-  const transactions = stockTransactions.filter(t => 
-    t.tipo === 'INGRESO' &&
-    t.fecha === fecha &&
-    t.modelo === modelo
-  );
+const transactions = stockTransactions.filter(t => 
+  (t.tipo === 'INGRESO' || t.tipo === 'LIQUIDACION' || t.tipo === 'REVERSION') &&
+  t.fecha === fecha &&
+  t.modelo === modelo
+);
 
   const operacionesPorHora = {};
   transactions.forEach(t => {
@@ -927,7 +997,10 @@ const getStockDetailByDate = (fecha, modelo) => {
     operacionesPorHora[t.hora].push({
       color: t.color,
       talla: t.talla,
-      cantidad: t.cantidad
+      cantidad: t.cantidad,
+      notes: t.notes,
+      tipo: t.tipo,
+      usuario: t.usuario
     });
   });
 
@@ -936,10 +1009,24 @@ const getStockDetailByDate = (fecha, modelo) => {
   .map(([hora, items]) => ({ 
     hora, 
     items,
-    usuario: transactions.find(t => t.hora === hora)?.usuario || ''
+    usuario: transactions.find(t => t.hora === hora)?.usuario || '',
+    esLiquidacion: transactions.filter(t => t.hora === hora).some(t => t.tipo === 'LIQUIDACION'),
+    totalLiquidacion: transactions.filter(t => t.hora === hora && t.tipo === 'LIQUIDACION').reduce((s, t) => s + t.cantidad, 0)
   }));
 
-  const total = transactions.reduce((sum, t) => sum + t.cantidad, 0);
+  const ultimaLiq = transactions
+  .filter(t => t.tipo === 'LIQUIDACION')
+  .map(t => t.hora)
+  .sort()
+  .pop() || null;
+
+  const total = transactions
+  .filter(t => 
+    t.tipo !== 'REVERSION' && 
+    t.tipo !== 'LIQUIDACION' &&
+    (!ultimaLiq || t.hora >= ultimaLiq)
+  )
+  .reduce((sum, t) => sum + t.cantidad, 0);
   const esCorreccion = transactions.some(t => t.cantidad < 0);
 
   return {
@@ -951,39 +1038,115 @@ const getStockDetailByDate = (fecha, modelo) => {
   };
 };
 
-  const getSalidaVentasReport = () => {
-    const { start, end } = getDateRangeForFilter(reportFilter);
-    
-    const filteredSales = sales.filter(s => 
-      s.fecha >= start &&
-      s.fecha <= end
-    );
+const getVentaDetailByDate = (fecha, modelo) => {
+  const ultimaLiq = stockTransactions
+    .filter(t => t.tipo === 'LIQUIDACION' && t.modelo === modelo && t.fecha === fecha)
+    .map(t => t.hora)
+    .sort()
+    .pop() || null;
 
-    const grouped = {};
-    filteredSales.forEach(sale => {
-      if (!grouped[sale.fecha]) grouped[sale.fecha] = {};
-      
-      sale.items.forEach(item => {
-        if (!grouped[sale.fecha][item.modelo]) grouped[sale.fecha][item.modelo] = 0;
-        grouped[sale.fecha][item.modelo] += item.quantity;
-      });
+    const ventasDelDia = sales.filter(s => 
+    s.fecha === fecha && 
+    s.items.some(i => i.modelo === modelo) &&
+    s.sales_channel !== 'AJUSTE' &&
+    (!ultimaLiq || (s.hora || '00:00:00') >= ultimaLiq)
+  );
+
+  const operaciones = ventasDelDia.map(venta => ({
+    hora: venta.hora || '00:00:00',
+    orderNumber: venta.order_number,
+    cliente: venta.client_name,
+    canal: venta.sales_channel || 'TIENDA',
+    items: venta.items.filter(i => i.modelo === modelo)
+  })).sort((a, b) => a.hora.localeCompare(b.hora));
+
+  const totalUnidades = operaciones.reduce((sum, op) => 
+    sum + op.items.reduce((s, i) => s + i.quantity, 0), 0
+  );
+
+  return { fecha, modelo, operaciones, totalUnidades };
+};
+
+  const getSalidaVentasReport = () => {
+  const { start, end } = getDateRangeForFilter(reportFilter);
+
+  const ultimaLiqPorModelo = {};
+  stockTransactions
+    .filter(t => t.tipo === 'LIQUIDACION')
+    .forEach(t => {
+      const key = t.modelo;
+      const tKey = `${t.fecha}T${t.hora}`;
+      if (!ultimaLiqPorModelo[key] || tKey > ultimaLiqPorModelo[key]) {
+        ultimaLiqPorModelo[key] = tKey;
+      }
     });
 
-    return grouped;
-  };
+  const filteredSales = sales.filter(s => 
+    s.fecha >= start && 
+    s.fecha <= end &&
+    s.sales_channel !== 'AJUSTE'
+  );
 
-  const getStockALaFechaReport = () => {
+  const grouped = {};
+  filteredSales.forEach(sale => {
+    if (!grouped[sale.fecha]) grouped[sale.fecha] = {};
+    sale.items.forEach(item => {
+      const ultimaLiq = ultimaLiqPorModelo[item.modelo];
+      const saleKey = `${sale.fecha}T${sale.hora || '00:00:00'}`;
+      if (ultimaLiq && saleKey < ultimaLiq) return;
+      if (!grouped[sale.fecha][item.modelo]) grouped[sale.fecha][item.modelo] = 0;
+      grouped[sale.fecha][item.modelo] += item.quantity;
+    });
+  });
+
+  return grouped;
+};
+
+  // ============================================
+// FUNCIÓN BASE — Stock calculado desde transacciones
+// ============================================
+const calcularStockDesdeTransacciones = () => {
+  const sorted = [...stockTransactions].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+    return a.hora.localeCompare(b.hora);
+  });
+
+  const stock = {};
+  sorted.forEach(t => {
+    if (!stock[t.modelo]) stock[t.modelo] = {};
+    if (!stock[t.modelo][t.color]) stock[t.modelo][t.color] = {};
+    if (!stock[t.modelo][t.color][t.talla]) stock[t.modelo][t.color][t.talla] = 0;
+
+    if (t.tipo === 'LIQUIDACION') {
+  stock[t.modelo][t.color][t.talla] = 0;
+} else if (t.tipo === 'SALIDA') {
+  stock[t.modelo][t.color][t.talla] = Math.max(0, stock[t.modelo][t.color][t.talla] - t.cantidad);
+} else if (t.tipo === 'REVERSION') {
+  stock[t.modelo][t.color][t.talla] += t.cantidad;
+} else {
+  stock[t.modelo][t.color][t.talla] += t.cantidad;
+      if (stock[t.modelo][t.color][t.talla] < 0) {
+        stock[t.modelo][t.color][t.talla] = 0;
+      }
+    }
+  });
+  return stock;
+};
+
+  // getStockALaFechaReport — volver al original
+const getStockALaFechaReport = () => {
+  const stock = calcularStockDesdeTransacciones();
   const stockByModel = {};
   products.filter(p => p.activo !== false).forEach(product => {
     let total = 0;
-    Object.values(product.stock || {}).forEach(tallas => {
-      Object.values(tallas).forEach(cantidad => total += cantidad);
-    });
+    Object.values(stock[product.modelo] || {}).forEach(tallas =>
+      Object.values(tallas).forEach(cant => total += cant)
+    );
     stockByModel[product.modelo] = total;
   });
   return stockByModel;
 };
-  
+
 // ============================================
 // FUNCIONES AUXILIARES
 // ============================================
@@ -992,7 +1155,7 @@ const downloadOrderNote = (sale) => {
   
   // Logo
   try {
-    doc.addImage(logoABermud, 'JPEG', 15, 10, 30, 30);
+    doc.addImage(logoQhapaq, 'JPEG', 15, 10, 30, 30);
   } catch (e) {
     console.log('Logo no disponible');
   }
@@ -1000,7 +1163,7 @@ const downloadOrderNote = (sale) => {
   // Encabezado CENTRADO debajo del logo
   doc.setFontSize(20);
   doc.setFont(undefined, 'bold');
-  doc.text('ABermud', 105, 20, { align: 'center' });
+  doc.text('Qhapaq', 105, 20, { align: 'center' });
   
   doc.setFontSize(10);
   doc.setFont(undefined, 'normal');
@@ -1094,7 +1257,7 @@ doc.autoTable({
   doc.setFontSize(9);
   doc.setFont(undefined, 'normal');
   doc.text('Gracias por su compra', 105, pageHeight - 50, { align: 'center' });
-  doc.text('ABermud - Lo bueno va contigo', 105, pageHeight - 15, { align: 'center' });
+  doc.text('Qhapaq - Sistema de Gestion de Inventario', 105, pageHeight - 15, { align: 'center' });
 
   doc.save(`Pedido-${sale.order_number}.pdf`);
 };
@@ -1110,7 +1273,7 @@ const shareOrderViaWhatsApp = (sale) => {
   });
 
   let mensaje = `*NOTA DE PEDIDO*\n`;
-  mensaje += `*ABermud - Lo bueno va contigo*\n\n`;
+  mensaje += `*Qhapaq - Sistema de Gestion de Inventario*\n\n`;
   mensaje += `*Pedido N° ${sale.order_number}*\n`;
   mensaje += `📅 Fecha: ${sale.fecha.split('-').reverse().join('/')}\n\n`;
   
@@ -1140,7 +1303,7 @@ const shareOrderViaWhatsApp = (sale) => {
   
   mensaje += `\n💰 *TOTAL: S/ ${sale.total.toFixed(2)}*\n\n`;
   mensaje += `Gracias por su compra\n`;
-  mensaje += `ABermud - Lo bueno va contigo`;
+  mensaje += `Qhapaq - Sistema de Gestion de Inventario`;
   
   const encodedMessage = encodeURIComponent(mensaje);
   const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
@@ -1151,13 +1314,14 @@ const shareOrderViaWhatsApp = (sale) => {
   // CÁLCULOS PARA DASHBOARD
   // ============================================
 
-  const totalInventoryValue = products.reduce((sum, product) => {
-    let totalUnits = 0;
-    Object.values(product.stock || {}).forEach(tallas => {
-      Object.values(tallas).forEach(cantidad => totalUnits += cantidad);
-    });
-    return sum + (totalUnits * product.precio_venta);
-  }, 0);
+  const stockCalculado = stockGlobal;
+const totalInventoryValue = products.reduce((sum, product) => {
+  let totalUnits = 0;
+  Object.values(stockCalculado[product.modelo] || {}).forEach(tallas =>
+    Object.values(tallas).forEach(cant => totalUnits += cant)
+  );
+  return sum + (totalUnits * product.precio_venta);
+}, 0);
 
   const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
 
@@ -1178,12 +1342,12 @@ const shareOrderViaWhatsApp = (sale) => {
   };
 
   const lowStockProducts = products.filter(product => {
-    let total = 0;
-    Object.values(product.stock || {}).forEach(tallas => {
-      Object.values(tallas).forEach(cantidad => total += cantidad);
-    });
-    return total < 10;
-  });
+  let total = 0;
+  Object.values(stockCalculado[product.modelo] || {}).forEach(tallas =>
+    Object.values(tallas).forEach(cant => total += cant)
+  );
+  return total < 10;
+});
 
   // Filtros
   const filteredProducts = products.filter(product =>
@@ -1204,66 +1368,59 @@ const shareOrderViaWhatsApp = (sale) => {
   // CÁLCULOS PARA REPORTES
   // ============================================
 
-  const getStockGeneralReport = () => {
+  // getStockGeneralReport — volver al original
+const getStockGeneralReport = () => {
+  const stock = calcularStockDesdeTransacciones();
   return products
     .filter(product => product.activo !== false)
     .map(product => {
+      const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
+      const stockModelo = stock[product.modelo] || {};
       const stockByColor = {};
       let totalProduct = 0;
-      
+
       product.colors?.forEach(color => {
         stockByColor[color] = {};
-        const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
         tallas.forEach(talla => {
-          const cantidad = product.stock?.[color]?.[talla] || 0;
+          const cantidad = stockModelo[color]?.[talla] || 0;
           stockByColor[color][talla] = cantidad;
           totalProduct += cantidad;
         });
       });
-      
+
       return {
         modelo: product.modelo,
         stockByColor,
         total: totalProduct,
-        tallas: product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL']
+        tallas
       };
     })
     .sort((a, b) => b.total - a.total);
 };
 
 const getStockClientesReport = () => {
+  const stock = calcularStockDesdeTransacciones();
   return products
     .filter(product => product.activo !== false)
     .map(product => {
-      const colorsByTalla = {};
       const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
+      const colorsByTalla = {};
       tallas.forEach(talla => {
-        colorsByTalla[talla] = [];
-        product.colors?.forEach(color => {
-          const cantidad = product.stock?.[color]?.[talla] || 0;
-          if (cantidad > 0) {
-            colorsByTalla[talla].push(color);
-          }
-        });
+        colorsByTalla[talla] = product.colors?.filter(color =>
+          (stock[product.modelo]?.[color]?.[talla] || 0) > 0
+        ) || [];
       });
 
-      // Calcular total para ordenar igual que Stock General
       let totalProduct = 0;
-product.colors?.forEach(color => {
-  const tallas = product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL'];
-  tallas.forEach(talla => {
-    totalProduct += product.stock?.[color]?.[talla] || 0;
-  });
-});
+      product.colors?.forEach(color =>
+        tallas.forEach(talla =>
+          totalProduct += stock[product.modelo]?.[color]?.[talla] || 0
+        )
+      );
 
-return {
-  modelo: product.modelo,
-  colorsByTalla,
-  total: totalProduct,
-  tallas: product.tallas?.length ? product.tallas : ['S', 'M', 'L', 'XL']
-};
+      return { modelo: product.modelo, colorsByTalla, total: totalProduct, tallas };
     })
-    .filter(p => p.total > 0) // Solo mostrar productos con stock disponible
+    .filter(p => p.total > 0)
     .sort((a, b) => b.total - a.total);
 };
 
@@ -1339,7 +1496,7 @@ return {
           existing.vendido += item.quantity;
         } else {
           const producto = products.find(p => p.modelo === item.modelo);
-          const stockActual = producto?.stock?.[item.color]?.[item.talla] || 0;
+          const stockActual = calcularStockDesdeTransacciones()[item.modelo]?.[item.color]?.[item.talla] || 0;
           
           variantes.push({
             modelo: item.modelo,
@@ -1546,7 +1703,7 @@ return {
                           </tr>
                         );
                       })}
-                      <tr className="bg-black text-white">
+                      <tr className="bg-blue-950 text-white">
                         <td className="p-3 font-bold border-r">TOTAL</td>
                         {modelosOrdenados.map(m => (
                           <td key={m} className="p-3 text-center font-bold">{totalPorModelo[m] || 0}</td>
@@ -1627,11 +1784,11 @@ return {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-lg text-gray-500">Filtrar por:</span>
         <button onClick={() => setFiltroAnalisis('hoy')}
-          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'hoy' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
           Hoy
         </button>
         <button onClick={() => setFiltroAnalisis('personalizado')}
-          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-lg font-medium ${filtroAnalisis === 'personalizado' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
           Personalizado
         </button>
       </div>
@@ -1651,7 +1808,7 @@ return {
 
       {/* TABLA 1: Ventas por Medio con fechas */}
 <div className="border rounded-lg overflow-hidden">
-  <div className="bg-gray-800 text-white p-3">
+  <div className="bg-blue-950 text-white p-3">
     <span className="font-bold text-xl">📊 VENTAS POR MEDIO</span>
   </div>
   <div className="overflow-x-auto">
@@ -1693,7 +1850,7 @@ return {
                         <td className={`p-3 text-center whitespace-nowrap ${data?.cantidad > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
                           {data?.cantidad || 0}
                         </td>
-                        <td className={`p-3 text-center border-r whitespace-nowrap ${data?.monto > 0 ? 'text-emerald-600' : 'text-gray-300'}`}>
+                        <td className={`p-3 text-center border-r whitespace-nowrap ${data?.monto > 0 ? 'font-bold text-emerald-600' : 'text-gray-300'}`}>
                           {data?.monto ? `S/ ${data.monto.toFixed(2)}` : '-'}
                         </td>
                       </React.Fragment>
@@ -1702,7 +1859,7 @@ return {
                 </tr>
               );
             })}
-            <tr className="bg-black text-white">
+            <tr className="bg-blue-950 text-white">
               <td className="p-3 font-bold border-r whitespace-nowrap">TOTAL</td>
               {medios.map(m => (
                 <React.Fragment key={m}>
@@ -1720,7 +1877,7 @@ return {
 
       {/* TABLA 2: Clientes completos */}
       <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-800 text-white p-3 flex justify-between items-center">
+        <div className="bg-blue-950 text-white p-3 flex justify-between items-center">
           <span className="font-bold text-xl">👥 CLIENTES</span>
           <span className="text-xs text-gray-400">{clientesOrdenados.length} clientes</span>
         </div>
@@ -1754,7 +1911,7 @@ return {
 
       {/* TABLA 3: Por departamento simple */}
       <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-800 text-white p-3">
+        <div className="bg-blue-950 text-white p-3">
           <span className="font-bold text-xl">📍 POR DEPARTAMENTO</span>
         </div>
         <table className="w-full text-base">
@@ -1777,7 +1934,7 @@ return {
                     <td className="p-3 text-center text-emerald-600 font-bold">S/ {data.monto.toFixed(2)}</td>
                   </tr>
                 ))}
-                <tr className="bg-black text-white">
+                <tr className="bg-blue-950 text-white">
                   <td className="p-3 font-bold text-xl">TOTAL</td>
                   <td className="p-3 text-center font-bold text-xl">{ventasFiltradas.length}</td>
                   <td className="p-3 text-center font-bold text-xl">
@@ -1808,73 +1965,39 @@ return {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
-<header className="bg-black text-white sticky top-0 z-40 shadow-lg">
-  <div className="max-w-7xl mx-auto px-4 py-5 md:py-4">
+<header className="sticky top-0 z-40 border-b border-[#D4B896]" style={{backgroundColor: '#F3F4F6'}}>  <div className="max-w-7xl mx-auto px-4 py-2">
     <div className="flex items-center justify-between">
-      
-      {/* Logo clickeable - vuelve al Dashboard */}
       <button 
         onClick={() => setActiveTab(userRol === 'admin' || permisos?.ver_dashboard ? 'dashboard' : 'inventario')}
-        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        className="flex flex-col items-start hover:opacity-80 transition-opacity"
       >
         <img 
-          src={logoABermud} 
-          alt="ABermud Logo" 
-          className="w-16 h-16 md:w-14 md:h-14 rounded-full object-cover"
+          src={logoQhapaq} 
+          alt="Qhapaq Logo" 
+          className="h-36 md:h-36 object-contain -ml-4"
         />
-        <div className="text-left">
-          <h1 className="text-3xl md:text-2xl font-bold">ABermud</h1>
-          <p className="text-base md:text-sm text-gray-300 italic">Lo bueno va contigo</p>
-        </div>
+        <p className="text-base text-gray-700 font-semibold mt-1 mb-0.5 pl-1">
+          {config?.nombre_negocio || 'Prueba_Qhapaq'}
+        </p>
       </button>
 
-      {/* Desktop: ingresos + botón salir */}
-      <div className="hidden md:flex items-center gap-4">
-        <div className="text-right">
-          <p className="text-sm font-medium">Ingresos del día</p>
-          <p className="text-xl font-bold text-emerald-400">
-            S/ {sales
-              .filter(s => s.fecha === getPeruDateTime().fecha)
-              .reduce((sum, s) => sum + s.total, 0)
-              .toFixed(2)}
-          </p>
-        </div>
-        <button
-          onClick={async () => {
-            if (!confirm('¿Cerrar sesión?')) return;
-            await supabase.auth.signOut();
-            window.location.href = '/login';
-          }}
-          className="flex items-center gap-2 border border-white/30 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-          Salir
-        </button>
-      </div>
-
-      {/* Móvil: hamburguesa */}
       <button 
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="md:hidden p-2 hover:bg-white/10 rounded-lg"
+        className="md:hidden p-2 hover:bg-gray-100 rounded-lg text-gray-600"
       >
-        <Menu size={24} />
+        <Menu size={36} />
       </button>
-
     </div>
   </div>
 </header>
 
       {/* NAVIGATION */}
       <nav className={`
-        ${mobileMenuOpen ? 'block' : 'hidden'} 
-        md:block bg-white border-b sticky top-18 z-30 shadow-sm
-      `}>
+  ${mobileMenuOpen ? 'block' : 'hidden'} 
+  md:block border-b border-[#D4B896] sticky z-30
+`} style={{top: '72px', backgroundColor: '#F3F4F6'}}>
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-2 text-xl">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-0 py-1 text-lg">
             {[
   { id: 'dashboard',      icon: Home,              label: 'Dashboard',      soloAdmin: true  },
   { id: 'productos',      icon: Package,           label: 'Productos',      soloAdmin: true  },
@@ -1899,7 +2022,7 @@ return {
     key={tab.id}
     onClick={() => { setActiveTab(tab.id); setMobileMenuOpen(false); }}
     className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
-      ${activeTab === tab.id ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+      ${activeTab === tab.id ? 'bg-blue-950 text-white' : 'text-gray-700 hover:bg-[#EDE5DA]'}`}
   >
     <tab.icon size={20} />
     <span>{tab.label}</span>
@@ -1922,100 +2045,155 @@ return {
       </nav>
 
       {/* BARRA RÁPIDA - solo móvil */}
-<div className="md:hidden bg-white border-b flex">
+<div className="md:hidden bg-blue-950 border-b flex">
   {[
     { id: 'inventario', icon: ClipboardListIcon, label: 'Inventario' },
     { id: 'ventas', icon: ShoppingCart, label: 'Ventas' },
     { id: 'reportes', icon: TrendingUp, label: 'Reportes' },
   ].map(tab => (
     <button
-      key={tab.id}
-      onClick={() => setActiveTab(tab.id)}
-      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-medium text-xl transition-all
-        ${activeTab === tab.id ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-    >
-      <tab.icon size={20} />
-      <span>{tab.label}</span>
-    </button>
+  key={tab.id}
+  onClick={() => setActiveTab(tab.id)}
+  onTouchStart={(e) => e.currentTarget.style.backgroundColor = '#4B5563'}
+  onTouchEnd={(e) => e.currentTarget.style.backgroundColor = ''}
+  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 font-medium text-xl transition-all
+    ${activeTab === tab.id ? 'bg-blue-950 text-white' : 'text-white'}`}
+>
+  <tab.icon size={20} />
+  <span>{tab.label}</span>
+</button>
   ))}
 </div>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-7xl mx-auto px-4 py-6 text-xl md:text-base">
+      <div style={{backgroundColor: '#F3F4F6', minHeight: '100vh'}}>
+      <main className="max-w-7xl mx-auto px-4 py-6 text-xl md:text-base min-h-screen" style={{backgroundColor: '#F3F4F6'}}>
         
        {/* TAB: DASHBOARD */}
 {activeTab === 'dashboard' && (
   <div className="space-y-6">
 
-      {/* 4 MÉTRICAS */}
-<div className="grid grid-cols-4 gap-4">
+    {(() => {
+  if (!configVenc?.fecha_vencimiento) return null;
+  const hoy = new Date();
+  const venc = new Date(configVenc.fecha_vencimiento + 'T00:00:00');
+  const diffDias = Math.ceil((venc - hoy) / (1000 * 60 * 60 * 24));
+if (configVenc.activo === false) {
+  return (
+    <div className="bg-red-600 text-white rounded-xl p-4 text-lg font-semibold">
+      🔴 Servicio suspendido. Contacta a tu asesor para reactivar.
+    </div>
+  );
+}
+if (diffDias <= 0) {
+  return (
+    <div className="bg-red-100 border border-red-400 text-red-800 rounded-xl p-4 text-base font-semibold">
+      🔴 Tu servicio venció el {venc.toLocaleDateString('es-PE')}. Contáctate con tu asesor.
+    </div>
+  );
+}
+if (diffDias <= 3) {
+  return (
+    <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-xl p-4 text-base font-semibold">
+      ⚠️ Tu servicio vence el {venc.toLocaleDateString('es-PE')}. Quedan {diffDias} día(s).
+    </div>
+  );
+}
+return null;
+})()}
+
+{userRol === 'admin' && mostrarResetAuto && (
+  <div className="bg-blue-100 border border-blue-400 text-blue-800 rounded-xl p-4 text-base font-semibold">
+    🔄 Es momento de hacer el Backup mensual. Ve a <strong>Configuración</strong> → "Backup + Limpiar Transacciones".
+  </div>
+)}
+
+     {/* 4 MÉTRICAS */}
+<div className="grid grid-cols-4 gap-2">
   {(() => {
     const hoy = getPeruDateTime().fecha;
-    const ayer = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 1);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    })();
     const mesActual = hoy.slice(0, 7);
-    const mesAnterior = (() => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - 1);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    })();
 
     const ventasHoy = sales.filter(s => s.fecha === hoy).length;
-    const ventasAyer = sales.filter(s => s.fecha === ayer).length;
-    const pctVentas = ventasAyer === 0 ? 100 : Math.round(((ventasHoy - ventasAyer) / ventasAyer) * 100);
-
     const ingresosHoy = sales.filter(s => s.fecha === hoy).reduce((sum, s) => sum + s.total, 0);
-    const ingresosAyer = sales.filter(s => s.fecha === ayer).reduce((sum, s) => sum + s.total, 0);
-    const pctIngresos = ingresosAyer === 0 ? 100 : Math.round(((ingresosHoy - ingresosAyer) / ingresosAyer) * 100);
-
-    const pedidosMes = sales.filter(s => s.fecha?.slice(0,7) === mesActual).length;
-    const pedidosMesAnt = sales.filter(s => s.fecha?.slice(0,7) === mesAnterior).length;
-    const pctPedidos = pedidosMesAnt === 0 ? 100 : Math.round(((pedidosMes - pedidosMesAnt) / pedidosMesAnt) * 100);
-
     const ventasMes = sales.filter(s => s.fecha?.slice(0,7) === mesActual).reduce((sum, s) => sum + s.total, 0);
-    const ventasMesAnt = sales.filter(s => s.fecha?.slice(0,7) === mesAnterior).reduce((sum, s) => sum + s.total, 0);
-    const pctVentasMes = ventasMesAnt === 0 ? 100 : parseFloat(((ventasMes - ventasMesAnt) / ventasMesAnt) * 100).toFixed(2);
+
+    const gananciaNeta = (() => {
+      let comprado = 0;
+      sales.filter(s => s.fecha === hoy && s.sales_channel !== 'AJUSTE').forEach(sale => {
+        sale.items?.forEach(item => {
+          const producto = products.find(p => p.modelo === item.modelo);
+          const compra = producto?.precio_compra || producto?.precioCompra || 0;
+comprado += compra * (item.quantity || 0);
+        });
+      });
+      return ingresosHoy - comprado;
+    })();
+
+    const valorInventario = products.reduce((sum, p) => {
+      const precioCompra = p.precio_compra || 0;
+      const totalUnidades = Object.values(stockGlobal[p.modelo] || {})
+        .flatMap(tallas => Object.values(tallas))
+        .reduce((s, q) => s + (Number(q) || 0), 0);
+      return sum + (precioCompra * totalUnidades);
+    }, 0);
 
     return (
       <>
-        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
-          <p className="text-sm md:text-m text-gray-600 mb-1">Ventas hoy</p>
-          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">{ventasHoy}</p>
-          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctVentas >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-            {pctVentas >= 0 ? '↑' : '↓'} {pctVentas >= 0 ? '+' : ''}{pctVentas}% vs ayer
-          </p>
+        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border">
+          <p className="text-xs font-bold text-gray-800 mb-1">Ventas</p>
+          <p className="text-base md:text-2xl mt-1.5 text-blue-500">{ventasHoy}</p>
         </div>
 
-        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
-          <p className="text-sm md:text-m text-gray-600 mb-1">Ingresos hoy</p>
-          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">S/{ingresosHoy.toFixed(0)}</p>
-          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctIngresos >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-            {pctIngresos >= 0 ? '↑' : '↓'} {pctIngresos >= 0 ? '+' : ''}{pctIngresos}% vs ayer
-          </p>
+        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border">
+          <p className="text-xs font-bold text-gray-800 mb-1">Ganancia neta</p>
+          <p className="text-base md:text-2xl mt-1.5 text-blue-500">S/{gananciaNeta.toLocaleString('es-PE')}</p>
         </div>
 
-        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
-          <p className="text-sm md:text-m text-gray-600 mb-1">Pedidos mes</p>
-          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">{pedidosMes}</p>
-          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctPedidos >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-            {pctPedidos >= 0 ? '↑' : '↓'} {pctPedidos >= 0 ? '+' : ''}{pctPedidos}% vs anterior
-          </p>
+        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border">
+          <p className="text-xs font-bold text-gray-800 mb-1">Inventario</p>
+          <p className="text-base md:text-2xl mt-1.5 text-blue-500">S/{valorInventario.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
 
-        <div className="bg-white p-2 md:p-3 rounded-xl shadow-sm border">
-          <p className="text-sm md:text-m text-gray-600 mb-1">Ventas mes</p>
-          <p className="text-xl md:text-2xl font-bold mt-1.5 mb-1.5">S/{ventasMes.toFixed(0)}</p>
-          <p className={`text-xs md:text-sm mt-0.5 font-medium ${pctVentasMes >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-            {pctVentasMes >= 0 ? '↑' : '↓'} {pctVentasMes >= 0 ? '+' : ''}{pctVentasMes}% vs anterior
-          </p>
+        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border">
+          <p className="text-xs font-bold text-gray-800 mb-1">Ventas mes</p>
+          <p className="text-base md:text-2xl mt-1.5 text-blue-500">S/{ventasMes.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
       </>
     );
   })()}
 </div>
+
+{/* AVISO: Muchas transacciones */}
+{stockTransactions.length >= 2000 && (
+  <div className="mx-4 mb-4 p-4 bg-orange-50 border-2 border-orange-400 rounded-2xl flex flex-col gap-3">
+    <div className="flex items-start gap-3">
+      <span className="text-2xl">⚠️</span>
+      <div>
+        <p className="font-bold text-orange-800 text-base">
+          Tenés {stockTransactions.length.toLocaleString()} movimientos registrados
+        </p>
+        <p className="text-orange-700 text-base mt-0.5">
+          Descargá tu backup para mantener la app rápida.
+        </p>
+      </div>
+    </div>
+    <div className="flex gap-2">
+      <button
+        onClick={() => setActiveTab('backup')}
+        className="flex-1 py-2.5 bg-orange-500 text-white rounded-xl font-medium text-sm"
+      >
+        📥 Ir a Backup
+      </button>
+      <button
+        onClick={() => setActiveTab('configuracion')}
+        className="flex-1 py-2.5 border-2 border-orange-400 text-orange-700 rounded-xl font-medium text-sm"
+      >
+        🗑️ Reset de Transacciones
+      </button>
+    </div>
+  </div>
+)}
 
     {/* VENTAS 7 DÍAS + EVOLUCIÓN MENSUAL */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2045,9 +2223,9 @@ return {
                     {dia.total > 0 ? `S/${Math.round(dia.total)}` : ''}
                   </span>
                   <div className="w-full rounded-t-md transition-all"
-                    style={{ height: `${Math.max((dia.total / maxTotal) * 100, dia.total > 0 ? 5 : 2)}%`, background: dia.esHoy ? '#10b981' : '#2d2d2d' }}
+                    style={{ height: `${Math.max((dia.total / maxTotal) * 100, dia.total > 0 ? 5 : 2)}%`, background: dia.esHoy ? '#1D4ED8' : '#2d2d2d' }}
                   />
-                  <span className={`text-sm md:text-xs font-medium ${dia.esHoy ? 'text-emerald-700' : 'text-gray-500'}`}>
+                  <span className={`text-sm md:text-xs font-medium ${dia.esHoy ? 'text-blue-700' : 'text-gray-500'}`}>
                     {dia.label}
                   </span>
                 </div>
@@ -2094,13 +2272,13 @@ return {
                 {d.total > 0 && (
                   <text x={x} y={y - 7} textAnchor="middle"
                     fontSize="8"
-                    fill={d.esActual ? '#10b981' : '#555'}
+                    fill={d.esActual ? '#3B82F6' : '#555'}
                     fontWeight="bold">
                     S/{Math.round(d.total).toLocaleString()}
                   </text>
                 )}
                 <text x={x} y={88} textAnchor="middle" fontSize="9"
-                  fill={d.esActual ? '#059669' : '#999'}
+                  fill={d.esActual ? '#3B82F6' : '#555'}
                   fontWeight={d.esActual ? 'bold' : 'normal'}>
                   {d.mes}
                 </text>
@@ -2112,6 +2290,72 @@ return {
     );
   })()}
 </div>
+</div>
+
+{/* Evolución inventario mensual */}
+<div className="bg-white rounded-xl shadow-sm border p-2">
+  <h3 className="font-bold text-lg mb-2">📦 Evolución de inventario mensual</h3>
+  {(() => {
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+    const anio = new Date().getFullYear();
+    const mesActual = new Date().getMonth();
+    const datos = meses.map((mes, idx) => {
+      const mesStr = `${anio}-${String(idx+1).padStart(2,'0')}`;
+      const esMesActual = idx === mesActual;
+      const valorHistorico = stockMensualData.find(s => s.mes === mesStr)?.valor_inventario || 0;
+      const valor = esMesActual
+        ? products.reduce((sum, p) => {
+            const precioCompra = p.precio_compra || 0;
+            const totalUnidades = Object.values(stockGlobal[p.modelo] || {})
+              .flatMap(tallas => Object.values(tallas))
+              .reduce((s, q) => s + (Number(q) || 0), 0);
+            return sum + (precioCompra * totalUnidades);
+          }, 0)
+        : valorHistorico;
+      return { mes, valor, esActual: esMesActual };
+    });
+    const maxValor = Math.max(...datos.map(d => d.valor), 1);
+    return (
+      <div className="relative">
+        <svg viewBox="0 0 300 100" className="w-full" style={{height:'130px'}}>
+          {datos.map((d, idx) => {
+            const x = (idx / 11) * 264 + 18;
+            const y = 60 - (d.valor / maxValor) * 48;
+            return (
+              <g key={idx}>
+                {idx < 11 && (
+                  <line
+                    x1={x} y1={y}
+                    x2={((idx+1) / 11) * 264 + 18}
+                    y2={60 - (datos[idx+1].valor / maxValor) * 48}
+                    stroke="#2d2d2d" strokeWidth="1.5"
+                  />
+                )}
+                <circle cx={x} cy={y} r="2"
+                  fill={d.esActual ? '#f97316' : '#fff'}
+                  stroke={d.esActual ? '#f97316' : '#2d2d2d'}
+                  strokeWidth="1.5"
+                />
+                {d.valor > 0 && (
+                  <text x={x} y={y - 7} textAnchor="middle"
+                    fontSize="8"
+                    fill={d.esActual ? '#3B82F6' : '#555'}
+                    fontWeight="bold">
+                    S/{Math.round(d.valor).toLocaleString()}
+                  </text>
+                )}
+                <text x={x} y={88} textAnchor="middle" fontSize="9"
+                  fill={d.esActual ? '#3B82F6' : '#555'}
+                  fontWeight={d.esActual ? 'bold' : 'normal'}>
+                  {d.mes}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  })()}
 </div>
 
     {/* PRODUCTOS + CANAL + DEPARTAMENTO */}
@@ -2168,7 +2412,7 @@ return {
                   <p className="text-xl font-bold">{livePct}%</p>
                   <p className="text-sm opacity-60">S/{Math.round(live)}</p>
                 </div>
-                <div className="flex-1 bg-emerald-500 text-white rounded-lg p-3 text-center">
+                <div className="flex-1 bg-blue-800 text-white rounded-lg p-3 text-center">
                   <p className="text-sm opacity-80">TIENDA</p>
                   <p className="text-xl font-bold">{tiendaPct}%</p>
                   <p className="text-sm opacity-70">S/{Math.round(tienda)}</p>
@@ -2176,7 +2420,7 @@ return {
               </div>
               <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
                 <div className="h-full transition-all" style={{ width: `${livePct}%`, background: '#2d2d2d' }} />
-                <div className="h-full transition-all" style={{ width: `${tiendaPct}%`, background: '#10b981' }} />
+                <div className="h-full transition-all" style={{ width: `${tiendaPct}%`, background: '#1D4ED8' }} />
               </div>
             </div>
           );
@@ -2215,12 +2459,12 @@ return {
     </div>
 
     {/* FOOTER */}
-    <div className="mt-4 bg-black text-white text-center text-sm py-6 rounded-xl">
-      <p className="font-medium text-white">© 2026 Qhapaq</p>
-      <p className="mt-0.5 text-gray-400">Sistema de gestión de inventario y ventas</p>
-      <p className="mt-0.5 text-gray-400">Parte de <span className="font-semibold text-white">InteliGest</span></p>
-      <p className="text-xs mt-0.5 text-gray-500">Desarrollado en Perú {'\u{1F1F5}\u{1F1EA}'}</p>
-    </div>
+<div className="mt-4 text-center text-sm py-6 rounded-xl" style={{backgroundColor: '#172554'}}>
+  <p className="font-medium text-[#F5EFE6]">© 2026 Qhapaq</p>
+  <p className="mt-0.5 text-[#C8A882]">Sistema de gestión de inventario</p>
+  <p className="mt-0.5 text-[#C8A882]">Parte de <span className="font-semibold text-[#F5EFE6]">InteliGest</span></p>
+  <p className="text-xs mt-0.5 text-[#A0785A]">Desarrollado en Perú 🇵🇪</p>
+</div>
 
   </div>
 )}
@@ -2243,7 +2487,7 @@ return {
       </div>
       <button
         onClick={() => setShowAddProduct(true)}
-        className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+        className="px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
       >
         <Plus size={20} />
         Agregar Producto
@@ -2256,9 +2500,9 @@ return {
   .sort((a, b) => {
     const getTotalStock = (product) => {
       let total = 0;
-      Object.values(product.stock || {}).forEach(tallas => {
-        Object.values(tallas).forEach(cantidad => total += cantidad);
-        });
+      Object.values(stockCalculado[product.modelo] || {}).forEach(tallas => {
+  Object.values(tallas).forEach(cantidad => { total += cantidad; });
+});
       return total;
     };
 
@@ -2272,9 +2516,9 @@ return {
   })
   .map(product => {
     let totalStock = 0;
-    Object.values(product.stock || {}).forEach(tallas => {
-      Object.values(tallas).forEach(cantidad => totalStock += cantidad);
-    });
+    Object.values(stockCalculado[product.modelo] || {}).forEach(tallas => {
+  Object.values(tallas).forEach(cantidad => { totalStock += cantidad; });
+});
 
     return (
       <div key={product.id} className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow">
@@ -2294,7 +2538,7 @@ return {
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-2xl mb-1">{product.modelo}</h3>
-                <p className="text-emerald-600 font-bold text-xl">S/ {product.precio_venta}</p>
+                <p className="text-blue-600 font-bold text-xl">S/ {product.precio_venta}</p>
                 {product.precio_compra > 0 && (
                   <p className="text-sm text-gray-500">Compra: S/ {product.precio_compra}</p>
                 )}
@@ -2304,7 +2548,7 @@ return {
               <div className="flex gap-1 flex-shrink-0">
                 <button
                   onClick={() => setEditingProduct(product)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  className="p-2 hover:bg-blue-100 rounded-lg"
                   title="Editar"
                 >
                   <Edit2 size={20} />
@@ -2320,7 +2564,7 @@ return {
                   onClick={() => toggleProductActive(product.id, product.activo)}
                   className={`p-3 rounded-lg ${
                     product.activo 
-                      ? 'hover:bg-green-100 text-green-600 font-bold bg-green-50' 
+                      ? 'hover:bg-green-100 text-blue-600 font-bold bg-green-50' 
                       : 'hover:bg-gray-100 text-gray-800 font-bold bg-gray-100'
                   }`}
                   title={product.activo ? 'Producto Activo - Click para desactivar' : 'Producto Inactivo - Click para activar'}
@@ -2379,7 +2623,7 @@ return {
       {(userRol === 'admin' || permisos?.agregar_stock) && (
   <button
     onClick={() => setShowAddStock(true)}
-    className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+    className="px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
   >
     <Plus size={22} />
     Agregar Stock
@@ -2394,11 +2638,11 @@ return {
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="font-bold text-m">Filtrar reportes:</h3>
           <button onClick={() => setReportFilter('hoy')}
-            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'hoy' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
             Hoy
           </button>
           <button onClick={() => setReportFilter('personalizado')}
-            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-lg font-medium text-m ${reportFilter === 'personalizado' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
             Personalizado
           </button>
           {reportFilter === 'personalizado' && (
@@ -2576,7 +2820,7 @@ return {
                 return totalB - totalA;
               });
               return sortedProducts.map(p => (
-                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[10px] md:text-sm text-center">
+                <th key={p.id} className="border p-1.5 font-bold min-w-[55px] md:min-w-[90px] text-[10px] md:text-base text-center">
                   <span className="md:hidden">{abreviarNombreProducto(p.modelo)}</span>
                   <span className="hidden md:block">{p.modelo}</span>
                 </th>
@@ -2598,8 +2842,21 @@ return {
                   <tr key={fecha}>
                     <td className="border p-1 font-medium sticky left-0 bg-white z-10">{fecha.split('-').slice(1).reverse().join('/')}</td>
                     {sortedProducts.map(p => (
-                      <td key={p.id} className="border p-1.5 text-center text-base">{modelos[p.modelo] || '0'}</td>
-                    ))}
+  <td 
+    key={p.id} 
+    className={`border p-1.5 text-center text-lg
+      ${modelos[p.modelo] ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+    onClick={() => {
+      if (modelos[p.modelo]) {
+        const detail = getVentaDetailByDate(fecha, p.modelo);
+        setVentaDetailData(detail);
+        setShowVentaDetail(true);
+      }
+    }}
+  >
+    {modelos[p.modelo] || '0'}
+  </td>
+))}
                   </tr>
                 ))}
                 <tr className="bg-gray-50 font-bold">
@@ -2627,15 +2884,15 @@ return {
 
 {/* MODAL: Vista ampliada de reportes - FORMATO PROFESIONAL RESPONSIVE */}
 {showStockModal && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/30 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
     <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
       
       {/* HEADER DEL DOCUMENTO */}
-      <div className="bg-black text-white p-3 md:p-6 flex-shrink-0">
+      <div className="bg-blue-900 text-white p-3 md:p-6 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold">ABermud</h1>
-            <p className="text-base md:text-sm italic">Lo bueno va contigo</p>
+            <h1 className="text-2xl md:text-2xl font-bold">Qhapaq-Prueba</h1>
+            <p className="text-base md:text-sm italic">Sistema de Gestión de Inventario</p>
             <p className="text-sm md:text-sm mt-1 md:mt-2 opacity-90">
               {showStockModal === 'stock_fecha' && 'Reporte de Stock Acumulado'}
               {showStockModal === 'movimientos' && 'Reporte de Movimientos de Stock'}
@@ -2701,8 +2958,8 @@ return {
           <div className="overflow-x-auto -mx-3 md:mx-0">
             <table className="w-full border-collapse border border-gray-300">
               <thead>
-                <tr className="bg-black text-white">
-                  <th className="border border-gray-300 p-1 text-left font-bold sticky left-0 bg-black z-10 text-[8px] md:text-sm w-12">
+                <tr className="bg-blue-900 text-white">
+                  <th className="border border-gray-300 p-1 text-left font-bold sticky left-0 bg-blue-900 z-10 text-[8px] md:text-sm w-12">
                     FECHA
                   </th>
                   {(() => {
@@ -2849,14 +3106,25 @@ return {
     return Object.keys(salidaData).length > 0 ? (
       Object.entries(salidaData).map(([fecha, modelos]) => (
         <tr key={fecha} className="even:bg-gray-50">
-          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-sm w-12">
+          <td className="border border-gray-300 p-1 md:p-2 font-medium sticky left-0 bg-white z-10 text-[10px] md:text-base w-12">
             {fecha.split('-').slice(1).reverse().join('/')}
           </td>
           {sortedProducts.map(p => (
-            <td key={p.id} className="border border-gray-300 p-1 md:p-2 text-center font-bold text-base md:text-sm">
-              {modelos[p.modelo] || '-'}
-            </td>
-          ))}
+  <td 
+    key={p.id} 
+    className={`border p-1.5 text-center text-base
+      ${modelos[p.modelo] ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+    onClick={() => {
+      if (modelos[p.modelo]) {
+        const detail = getVentaDetailByDate(fecha, p.modelo);
+        setVentaDetailData(detail);
+        setShowVentaDetail(true);
+      }
+    }}
+  >
+    {modelos[p.modelo] || '-'}
+  </td>
+))}
         </tr>
       ))
     ) : (
@@ -2939,7 +3207,7 @@ return {
               </div>
               <button
                 onClick={() => setShowAddClient(true)}
-                className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium"
+                className="px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 flex items-center gap-2 font-medium"
               >
                 <Plus size={20} />
                 Agregar Cliente
@@ -3014,7 +3282,7 @@ return {
         <h2 className="text-2xl font-bold">Ventas</h2>
         <button
           onClick={() => setShowAddSale(true)}
-          className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 font-medium text-lg"
+          className="px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 flex items-center gap-2 font-medium text-lg"
         >
           <Plus size={18} />
           Nueva Venta
@@ -3027,7 +3295,7 @@ return {
           onClick={() => setReportFilter('hoy')}
           className={`px-3 py-1.5 rounded-lg font-medium text-base transition-colors ${
             reportFilter === 'hoy'
-              ? 'bg-black text-white'
+              ? 'bg-blue-950 text-white'
               : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
           }`}
         >
@@ -3037,7 +3305,7 @@ return {
           onClick={() => setReportFilter('personalizado')}
           className={`px-3 py-1.5 rounded-lg font-medium text-base transition-colors ${
             reportFilter === 'personalizado'
-              ? 'bg-black text-white'
+              ? 'bg-blue-950 text-white'
               : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
           }`}
         >
@@ -3066,12 +3334,12 @@ return {
 
    {(() => {
   const { start, end } = getDateRangeForFilter(reportFilter);
-  const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
+  const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end && s.sales_channel !== 'AJUSTE');
   const totalVentas = ventasFiltradas.reduce((s, v) => s + v.total, 0);
   const totalGanancia = ventasFiltradas.reduce((sum, sale) => {
     return sum + sale.items.reduce((s, item) => {
       const producto = products.find(p => p.modelo === item.modelo);
-      const compra = producto?.precio_compra || producto?.precioCompra || 0;
+      const compra = producto?.precio_compra || 0;
       return s + (item.precioVenta - compra) * item.quantity;
     }, 0);
   }, 0);
@@ -3119,9 +3387,11 @@ return {
                       <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
                         sale.sales_channel === 'LIVE' 
                           ? 'bg-purple-100 text-purple-700'
+                          : sale.sales_channel === 'AJUSTE'
+                          ? 'bg-red-100 text-red-700'
                           : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {sale.sales_channel}
+                        {sale.sales_channel === 'AJUSTE' ? 'Salida' : sale.sales_channel}{sale.Vendedor ? ` · ${sale.Vendedor}` : ''}
                       </span>
                     </div>
                     <p className="text-xs text-gray-600 truncate">{sale.client_name}</p>
@@ -3173,7 +3443,7 @@ return {
         <button
           onClick={() => setReportFilter('hoy')}
           className={`px-4 py-2 rounded-lg font-medium ${
-            reportFilter === 'hoy' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+            reportFilter === 'hoy' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >
           Hoy
@@ -3181,7 +3451,7 @@ return {
         <button
           onClick={() => setReportFilter('personalizado')}
           className={`px-4 py-2 rounded-lg font-medium ${
-            reportFilter === 'personalizado' ? 'bg-black text-white' : 'bg-gray-100 hover:bg-gray-200'
+            reportFilter === 'personalizado' ? 'bg-blue-950 text-white' : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >
           Personalizado
@@ -3221,7 +3491,7 @@ return {
     </div>
     <button
       onClick={() => setShowModalStockGeneral(true)}
-      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium transition-colors"
     >
       <Eye size={20} />
       Ver Reporte
@@ -3239,7 +3509,7 @@ return {
     </div>
     <button
       onClick={() => setShowModalStockClientes(true)}
-      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors"
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium transition-colors"
     >
       <Eye size={20} />
       Ver Reporte
@@ -3258,7 +3528,7 @@ return {
           <FileText className="text-emerald-600" size={24} />
         </div>
         <button onClick={() => setShowModalReporteVentas(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium transition-colors">
           <Eye size={20} />Ver Reporte
         </button>
       </div>
@@ -3273,7 +3543,7 @@ return {
           <FileText className="text-slate-600" size={24} />
         </div>
         <button onClick={() => setShowModalAnalisisVentas(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium transition-colors">
           <Eye size={20} />Ver Reporte
         </button>
       </div>
@@ -3288,7 +3558,7 @@ return {
           <TrendingUp className="text-green-600" size={24} />
         </div>
         <button onClick={() => setShowModalGananciaNeta(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium transition-colors">
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium transition-colors">
           <Eye size={20} />Ver Reporte
         </button>
       </div>
@@ -3301,20 +3571,31 @@ return {
 
 {/* MODAL: Stock General */}
 {showModalStockGeneral && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div className="fixed inset-0 bg-blue-950 bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-        <h3 className="text-2xl font-bold">📦 Stock General</h3>
-        <button
-          onClick={() => setShowModalStockGeneral(false)}
-          className="text-gray-500 hover:text-black"
-        >
-          <X size={24} />
-        </button>
-      </div>
+      <div className="sticky top-0 bg-white border-b p-4">
+  <div className="flex justify-between items-center mb-3">
+    <h3 className="text-2xl font-bold">📦 Stock General</h3>
+    <button
+      onClick={() => { setShowModalStockGeneral(false); setSearchStockGeneral(''); }}
+      className="text-gray-500 hover:text-black"
+    >
+      <X size={24} />
+    </button>
+  </div>
+  <input
+    type="text"
+    placeholder="🔍 Buscar producto..."
+    value={searchStockGeneral}
+    onChange={e => setSearchStockGeneral(e.target.value)}
+    className="border border-gray-300 rounded-lg px-4 py-2 text-lg w-full focus:outline-none focus:border-black"
+  />
+</div>
       
       <div className="p-4 space-y-3">
-        {getStockGeneralReport().map((productData, idx) => {
+        {getStockGeneralReport()
+          .filter(p => p.modelo.toLowerCase().includes(searchStockGeneral.toLowerCase()))
+          .map((productData, idx) => {
           // Calcular totales por talla
           const totalesPorTalla = (productData.tallas || ['S','M','L','XL']).map(talla =>
             Object.values(productData.stockByColor).reduce((sum, tallas) => sum + (tallas[talla] || 0), 0)
@@ -3322,16 +3603,16 @@ return {
 
           return (
             <div key={idx} className="border rounded-lg p-4">
-              <h4 className="font-bold mb-3 bg-black text-white p-2 rounded flex justify-between items-center">
+              <h4 className="font-bold mb-3 bg-blue-950 text-white p-2 rounded flex justify-between items-center">
                 <span>{productData.modelo}</span>
-                <span className="text-emerald-400">
+                <span className="text-blue-200">
                   {Object.values(productData.stockByColor).reduce((sum, tallas) => 
                     sum + Object.values(tallas).reduce((a, b) => a + b, 0), 0)}
                 </span>
               </h4>
               <table className="w-full text-base border-collapse">
                 <thead>
-                  <tr className="bg-black text-white">
+                  <tr className="bg-blue-950 text-white">
                     <th className="border border-white p-1 text-center text-base">COLOR</th>
                     {(productData.tallas || ['S','M','L','XL']).map(talla => (
                       <th key={talla} className="border border-white p-2 text-center text-base">{talla}</th>
@@ -3356,7 +3637,7 @@ return {
                 </tbody>
                 {/* ✅ FILA TOTAL POR TALLA */}
                 <tfoot>
-                  <tr className="bg-gray-800 text-white font-bold">
+                  <tr className="bg-blue-950 text-white font-bold">
                     <td className="border border-gray-600 p-1 text-sm text-center">TOTAL</td>
                     {totalesPorTalla.map((total, i) => (
                       <td key={i} className="border border-gray-600 p-1 text-center text-lg">
@@ -3376,25 +3657,36 @@ return {
   
 {/* MODAL: Stock para Clientes */}
 {showModalStockClientes && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div className="fixed inset-0 bg-blue-950 bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="sticky top-0 bg-white border-b p-2 flex justify-between items-center">
-        <h3 className="text-2xl font-bold">👥 Stock para Clientes</h3>
-        <button
-          onClick={() => setShowModalStockClientes(false)}
-          className="text-gray-500 hover:text-black"
-        >
-          <X size={24} />
-        </button>
-      </div>
+      <div className="sticky top-0 bg-white border-b p-4">
+  <div className="flex justify-between items-center mb-3">
+    <h3 className="text-2xl font-bold">👥 Stock para Clientes</h3>
+    <button
+      onClick={() => { setShowModalStockClientes(false); setSearchStockClientes(''); }}
+      className="text-gray-500 hover:text-black"
+    >
+      <X size={24} />
+    </button>
+  </div>
+  <input
+    type="text"
+    placeholder="🔍 Buscar producto..."
+    value={searchStockClientes}
+    onChange={e => setSearchStockClientes(e.target.value)}
+    className="border border-gray-300 rounded-lg px-4 py-2 text-lg w-full focus:outline-none focus:border-black"
+  />
+</div>
       
       <div className="p-0.5 space-y-2">
-        {getStockClientesReport().map((productData, idx) => (
+        {getStockClientesReport()
+          .filter(p => p.modelo.toLowerCase().includes(searchStockClientes.toLowerCase()))
+          .map((productData, idx) => (
   <div key={idx} className="border rounded-lg overflow-hidden">
   <div className="overflow-x-auto">
     <table className="w-full text-sm md:text-sm border-collapse">
       <thead>
-        <tr className="bg-black text-white">
+        <tr className="bg-blue-950 text-white">
           <th colSpan={(productData.tallas?.length ? productData.tallas : ['S', 'M', 'L', 'XL']).length} className="p-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-lg">{productData.modelo}</span>
@@ -3428,7 +3720,7 @@ return {
             </div>
           </th>
         </tr>
-        <tr className="bg-black text-white">
+        <tr className="bg-blue-950 text-white">
           {(productData.tallas?.length ? productData.tallas : ['S', 'M', 'L', 'XL']).map(talla => (
             <th key={talla} className="border border-white p-1 text-center text-sm">{talla}</th>
           ))}
@@ -3478,7 +3770,7 @@ return {
 
 {/* MODAL: Reporte de Ventas */}
 {showModalReporteVentas && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div className="fixed inset-0 bg-blue-950 bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
 
       {/* PANTALLA 1 */}
@@ -3512,7 +3804,7 @@ return {
     </p>
     <div className="flex items-center justify-between mt-1">
       <p className="text-base text-gray-500">{data.ventas} {data.ventas === 1 ? 'venta' : 'ventas'}</p>
-      <span className="font-bold text-emerald-600 whitespace-nowrap text-xl">S/ {data.total.toFixed(2)}</span>
+      <span className="font-bold text-blue-600 whitespace-nowrap text-xl">S/ {data.total.toFixed(2)}</span>
     </div>
   </div>
   <span className="text-gray-700 text-5xl font-bold flex-shrink-0">›</span>
@@ -3539,7 +3831,7 @@ return {
 
 {/* MODAL: Análisis de Ventas */}
 {showModalAnalisisVentas && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div className="fixed inset-0 bg-blue-950 bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
         <h3 className="text-2xl font-bold">📈 Análisis de Ventas</h3>
@@ -3558,7 +3850,7 @@ return {
         {/* TAB: BACKUP */}
         {/* ============================================ */}
         {activeTab === 'backup' && (
-          <BackupTab supabase={supabase} />
+          <BackupTab supabase={supabase} stockMensualData={stockMensualData} productos={products} />
         )}
 
         {/* ============================================ */}
@@ -3566,13 +3858,24 @@ return {
         {/* ============================================ */}
         {activeTab === 'configuracion' && (
   <ConfiguracionTab
-    supabase={supabase}
-    products={products}
-    sales={sales}
-    clients={clients}
-  />
+  supabase={supabase}
+  products={products}
+  sales={sales}
+  clients={clients}
+  stockTransactions={stockTransactions}
+  calcularStock={calcularStockDesdeTransacciones}
+  guardarSnapshotMensual={guardarSnapshotMensual}
+  onResetComplete={() => {
+    loadProducts();
+    loadSales();
+    loadStockTransactions();
+    loadStockMensual();
+  }}
+/>
 )}
+
         </main>
+      </div>
 
       {/* ============================================ */}
       {/* MODALES */}
@@ -3580,11 +3883,11 @@ return {
 
       {/* MODAL: Agregar/Editar Producto */}
 {(showAddProduct || editingProduct) && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
 
       {/* Header fijo */}
-      <div className="bg-gray-900 px-5 py-4 flex items-center justify-between flex-shrink-0">
+      <div className="bg-blue-900 px-5 py-4 flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-white">
             {editingProduct ? '✏️ Editar Producto' : '➕ Agregar Producto'}
@@ -3610,7 +3913,7 @@ return {
 
         {/* SECCIÓN: Información básica */}
         <div className="border border-gray-200 rounded-2xl overflow-hidden">
-          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+          <div className="bg-blue-950 px-4 py-2.5 flex items-center gap-2">
             <span className="text-sm">📋</span>
             <h3 className="text-white font-bold text-2xl tracking-wide">INFORMACIÓN BÁSICA</h3>
           </div>
@@ -3686,7 +3989,7 @@ return {
 
         {/* SECCIÓN: Tallas */}
         <div className="border border-gray-200 rounded-2xl overflow-hidden">
-          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+          <div className="bg-blue-950 px-4 py-2.5 flex items-center gap-2">
             <span className="text-sm">📏</span>
             <h3 className="text-white font-bold text-2xl tracking-wide">TALLAS</h3>
           </div>
@@ -3744,7 +4047,7 @@ return {
                   }
                   setNewTallaInput('');
                 }}
-                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-xl"
+                className="px-4 py-2 bg-blue-950 text-white rounded-xl hover:bg-blue-800 transition-colors font-bold text-xl"
               >+</button>
             </div>
             <div className="flex flex-wrap gap-2 min-h-[32px]">
@@ -3772,7 +4075,7 @@ return {
 
         {/* SECCIÓN: Colores */}
         <div className="border border-gray-200 rounded-2xl overflow-hidden">
-          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+          <div className="bg-blue-950 px-4 py-2.5 flex items-center gap-2">
             <span className="text-sm">🎨</span>
             <h3 className="text-white font-bold text-2xl tracking-wide">COLORES DISPONIBLES</h3>
           </div>
@@ -3800,7 +4103,7 @@ return {
               />
               <button
                 onClick={() => addColorToProduct(editingProduct || newProduct)}
-                className="px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors font-bold text-lg"
+                className="px-4 py-2 bg-blue-950 text-white rounded-xl hover:bg-blue-800 transition-colors font-bold text-lg"
               >+</button>
             </div>
             <div className="flex flex-wrap gap-2 min-h-[32px]">
@@ -3822,7 +4125,7 @@ return {
 
         {/* SECCIÓN: Fotos */}
         <div className="border border-gray-200 rounded-2xl overflow-hidden">
-          <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-2">
+          <div className="bg-blue-950 px-4 py-2.5 flex items-center gap-2">
             <span className="text-sm">📸</span>
             <h3 className="text-white font-bold text-2xl tracking-wide">FOTOS DEL PRODUCTO</h3>
           </div>
@@ -3849,7 +4152,7 @@ return {
                         alt="Principal"
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="absolute inset-0 bg-blue-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <span className="text-white text-xs font-semibold">Cambiar</span>
                       </div>
                     </>
@@ -3913,7 +4216,7 @@ return {
                           {preview ? (
                             <>
                               <img src={preview} alt={color} className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="absolute inset-0 bg-blue-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <span className="text-white text-xl font-semibold">Cambiar</span>
                               </div>
                             </>
@@ -3981,18 +4284,18 @@ return {
         >Cancelar</button>
         <button
           onClick={editingProduct ? updateProduct : addProduct}
-          className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl font-semibold text-xl hover:bg-gray-700 transition-colors"
+          className="flex-1 py-2.5 bg-blue-950 text-white rounded-xl font-semibold text-xl hover:bg-gray-700 transition-colors"
         >
           {editingProduct ? 'Actualizar Producto ✓' : 'Guardar Producto ✓'}
         </button>
       </div>
-    </div>
+  </div>
   </div>
 )}
 
       {/* MODAL: Agregar Stock - SIMPLIFICADO V2 */}
 {showAddStock && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-3xl font-bold">Agregar Stock</h2>
@@ -4025,9 +4328,23 @@ return {
             className="w-full px-2 py-1 border rounded-lg focus:ring-2 focus:ring-black/10 outline-none text-2xl"
           >
             <option value="">-- Seleccionar --</option>
-            {products.filter(p => p.activo !== false).map(p => (
-              <option key={p.id} value={p.modelo}>{p.modelo}</option>
-            ))}
+{(() => {
+  const stockCalc = calcularStockDesdeTransacciones();
+  return products
+    .filter(p => p.activo !== false)
+    .map(p => ({
+      ...p,
+      totalUnidades: Object.values(stockCalc[p.modelo] || {})
+        .flatMap(colores => Object.values(colores))
+        .reduce((sum, qty) => sum + qty, 0)
+    }))
+    .sort((a, b) => b.totalUnidades - a.totalUnidades)
+    .map(p => (
+      <option key={p.id} value={p.modelo}>
+        {p.modelo} ({p.totalUnidades})
+      </option>
+    ));
+})()}
           </select>
         </div>
 
@@ -4054,13 +4371,14 @@ return {
     {(() => {
       const product = products.find(p => p.modelo === stockToAdd.modelo);
       const tallas = product?.tallas?.length ? product.tallas : ['S','M','L','XL'];
+      const stockCalculadoModal = calcularStockDesdeTransacciones();
       return product?.colors.map(color => (
         <div key={color} className="mb-4 p-0.5 bg-gray-50 rounded-lg">
           <p className="text-2xl font-bold mb-2">{color}</p>
           <div className="grid grid-cols-4 gap-2 md:gap-4">
             {tallas.map(talla => {
               const val = parseInt(stockToAdd.colors[color]?.[talla]) || 0;
-              const stockActual = product?.stock?.[color]?.[talla] || 0;
+              const stockActual = stockCalculadoModal[product.modelo]?.[color]?.[talla] || 0;
               return (
                 <div key={talla} className="flex flex-col items-center gap-1">
                   <label className={`text-lg font-medium px-2 py-1 rounded ${
@@ -4077,19 +4395,35 @@ return {
                         
                         {/* Input unificado - acepta positivos y negativos */}
                         <input
-                          type="text"
-                          inputMode="text"
+                          type="number"
+                          inputMode="numeric"
                           placeholder="0"
                           value={stockToAdd.colors[color]?.[talla] || ''}
                           onChange={(e) => {
-                            const valor = e.target.value;
-                            const cantidadInt = parseInt(valor) || 0;
-                            if (cantidadInt < 0 && (stockActual + cantidadInt) < 0) return;
-                            const newColors = { ...stockToAdd.colors };
-                            if (!newColors[color]) newColors[color] = {};
-                            newColors[color][talla] = valor;
-                            setStockToAdd({ ...stockToAdd, colors: newColors });
-                          }}
+  const valor = e.target.value;
+  const cantidadInt = parseInt(valor) || 0;
+
+  // Validar mezcla positivo/negativo
+  const otrasEntradas = Object.entries(stockToAdd.colors)
+    .flatMap(([c, ts]) => Object.entries(ts)
+      .filter(([t]) => !(c === color && t === talla))
+      .map(([, v]) => parseInt(v) || 0))
+    .filter(v => v !== 0);
+  const hayPositivos = otrasEntradas.some(v => v > 0);
+  const hayNegativos = otrasEntradas.some(v => v < 0);
+  if ((cantidadInt > 0 && hayNegativos) || (cantidadInt < 0 && hayPositivos)) {
+    alert('❌ No podés mezclar ingresos (+) y correcciones (-).\n\nHacé una operación por vez.');
+    return;
+  }
+
+  // Validar que no quede negativo
+  if (cantidadInt < 0 && (stockActual + cantidadInt) < 0) return;
+
+  const newColors = { ...stockToAdd.colors };
+  if (!newColors[color]) newColors[color] = {};
+  newColors[color][talla] = valor;
+  setStockToAdd({ ...stockToAdd, colors: newColors });
+}}
                           className={`w-full px-2 py-2 border rounded text-center text-3xl ${
                             val !== 0
                               ? val > 0
@@ -4125,7 +4459,7 @@ return {
             className={`flex-1 px-4 py-2 text-white rounded-lg font-medium text-2xl ${
               isProcessing 
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-blue-950 hover:bg-blue-800'
             }`}
           >  
             {isProcessing ? '⏳ Procesando...' : '📦 Guardar '}
@@ -4138,7 +4472,7 @@ return {
 
 {/* MODAL: Confirmación de Stock Agregado */}
 {showStockDetail && stockDetailData && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
       
       {/* Header */}
@@ -4186,11 +4520,43 @@ return {
       return (
   <div key={idx} className="pb-2 border-b border-gray-200 last:border-0">
     <div className="flex items-center justify-between mb-1">
-      <p className="text-base text-gray-500">{operacion.hora} · {operacion.usuario || ''}</p>
-      <button
+      <div>
+  <p className="text-base text-gray-500">{operacion.hora} · {operacion.usuario || ''}</p>
+  {operacion.items[0]?.notes?.includes('Reversión') && (
+  <p className="text-xs text-blue-500 font-medium">↩️ Reversión de venta</p>
+)}
+{operacion.esLiquidacion && (
+  <p className="text-base text-red-500 font-medium">🔴 Liquidación de stock: {operacion.totalLiquidacion}</p>
+)}
+</div>
+      {!operacion.items[0]?.notes?.includes('Reversión') && 
+ !operacion.items[0]?.notes?.includes('Liquidación') && 
+ operacion.items.every(item => item.cantidad > 0) &&
+ (() => {
+  // Verificar liquidación posterior
+  const ultimaLiquidacion = stockTransactions
+    .filter(t => t.modelo === stockDetailData.modelo && t.tipo === 'LIQUIDACION')
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.hora.localeCompare(a.hora))[0];
+  if (ultimaLiquidacion) {
+    if (stockDetailData.fecha < ultimaLiquidacion.fecha) return false;
+    if (stockDetailData.fecha === ultimaLiquidacion.fecha && operacion.hora <= ultimaLiquidacion.hora) return false;
+  }
+
+  // Verificar ventas posteriores
+  const hayVentaPosterior = stockTransactions.some(t =>
+    t.modelo === stockDetailData.modelo &&
+    t.tipo === 'SALIDA' &&
+    (t.fecha > stockDetailData.fecha ||
+    (t.fecha === stockDetailData.fecha && t.hora > operacion.hora))
+  );
+  if (hayVentaPosterior) return false;
+
+  return true;
+})() && <button
         onClick={async () => {
           const pin = prompt('Ingresa el PIN de administrador:');
-          if (pin !== '1111') {
+          const { data: cfg } = await supabase.from('configuracion').select('pin_admin').limit(1).single();
+          if (pin !== cfg?.pin_admin) {
             alert('PIN incorrecto.');
             return;
           }
@@ -4199,7 +4565,7 @@ return {
           try {
             const product = products.find(p => p.modelo === stockDetailData.modelo);
             if (!product) return;
-            const updatedStock = { ...product.stock };
+            const updatedStock = JSON.parse(JSON.stringify(product.stock));
             operacion.items.forEach(item => {
               if (updatedStock[item.color]?.[item.talla] !== undefined) {
                 updatedStock[item.color][item.talla] = Math.max(0, (updatedStock[item.color][item.talla] || 0) - item.cantidad);
@@ -4233,7 +4599,7 @@ return {
         title="Eliminar esta operación"
       >
         <Trash2 size={20} />
-      </button>
+      </button>}
     </div>
     {Object.entries(grouped).map(([color, items]) => (
             <div key={color} className="text-base">
@@ -4286,7 +4652,7 @@ return {
       {/* Botón Cerrar */}
       <button
         onClick={() => setShowStockDetail(false)}
-        className="w-full mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium text-lg"
+        className="w-full mt-4 px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium text-lg"
       >
         Cerrar
       </button>
@@ -4294,9 +4660,95 @@ return {
   </div>
 )}
 
+{showVentaDetail && ventaDetailData && (
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+      
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <span className="text-2xl">🛒</span>
+          </div>
+          <h2 className="text-xl font-bold">Detalle de Ventas</h2>
+        </div>
+        <button onClick={() => setShowVentaDetail(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Fecha y Modelo */}
+      <div className="mb-4 pb-3 border-b">
+        <p className="text-base text-gray-600">
+          {ventaDetailData.fecha.split('-').reverse().join('/')} - {ventaDetailData.modelo}
+        </p>
+      </div>
+
+      {(() => {
+  const liq = stockTransactions
+    .filter(t => t.tipo === 'LIQUIDACION' && t.modelo === ventaDetailData.modelo && t.fecha === ventaDetailData.fecha)
+    .sort((a, b) => a.hora.localeCompare(b.hora))
+    .pop();
+  if (!liq) return null;
+  return (
+    <div className="flex items-center gap-2 bg-red-50 border border-red-300 rounded-lg px-3 py-2 mb-3 text-sm font-semibold text-red-700">
+      🔴 Liquidado a las {liq.hora} — ventas desde aquí
+    </div>
+  );
+})()}
+
+      {/* Detalle agrupado por talla */}
+<div className="mb-4 space-y-2 max-h-60 overflow-y-auto">
+  {(() => {
+    const grouped = {};
+    ventaDetailData.operaciones.forEach(op => {
+      op.items.forEach(item => {
+        if (!grouped[item.talla]) grouped[item.talla] = {};
+        if (!grouped[item.talla][item.color]) grouped[item.talla][item.color] = 0;
+        grouped[item.talla][item.color] += item.quantity;
+      });
+    });
+    const ordenTallas = ['ST','XS','S','M','L','XL','XXL','2','4','6','8','10','12','14','16','18','20','22','24','26','28','30','32','34','36','38','40'];
+    return Object.entries(grouped)
+      .sort(([a], [b]) => {
+        const ia = ordenTallas.indexOf(a);
+        const ib = ordenTallas.indexOf(b);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      })
+      .map(([talla, colores]) => (
+        <div key={talla} className="text-base border-b border-gray-100 pb-1">
+          <span className="font-bold bg-blue-950 text-white px-2 py-0.5 rounded text-sm mr-2">{talla}</span>
+          {Object.entries(colores).map(([color, qty], i, arr) => (
+            <span key={color}>
+              {color} x{qty}{i < arr.length - 1 ? ', ' : ''}
+            </span>
+          ))}
+        </div>
+      ));
+  })()}
+</div>
+
+{/* Total */}
+<div clssName="pt-3 border-t">
+  <div className="flex justify-between items-center">
+    <span className="font-bold">TOTAL:</span>
+    <span className="font-bold text-lg">{ventaDetailData.totalUnidades}</span>
+  </div>
+</div>
+
+<button
+  onClick={() => setShowVentaDetail(false)}
+  className="w-full mt-4 px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium text-lg"
+>
+  Cerrar
+</button>
+    </div>
+  </div>
+)}
+
       {/* MODAL: Agregar Cliente */}
       {showAddClient && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Agregar Cliente</h2>
@@ -4352,7 +4804,7 @@ return {
                 </button>
                 <button
                   onClick={addClient}
-                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+                  className="flex-1 px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium"
                 >
                   Guardar
                 </button>
@@ -4364,7 +4816,7 @@ return {
 
       {/* MODAL: Editar Cliente */}
       {editingClient && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Editar Cliente</h2>
@@ -4420,7 +4872,7 @@ return {
                 </button>
                 <button
                   onClick={updateClient}
-                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+                  className="flex-1 px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium"
                 >
                   Actualizar
                 </button>
@@ -4431,8 +4883,10 @@ return {
       )}
 
       {/* MODAL: Nueva Venta - OPTIMIZADO PARA MAYORISTAS */}
-{showAddSale && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+{showAddSale && (() => {
+  const stockCalculado = stockGlobal;
+  return (
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
     <div className="bg-white rounded-2xl p-6 max-w-6xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-2 sticky top-0 bg-white z-10 py-1 md:py-3 border-b">
         <h2 className="text-3xl md:text-xl font-bold">Nueva Venta</h2>
@@ -4440,6 +4894,7 @@ return {
           setShowAddSale(false);
           setSelectedProductModel(null);
           setProductSearchTerm('');
+          setIsAjusteInventario(false);
         }} className="p-2 hover:bg-gray-100 rounded-lg">
           <X size={20} />
         </button>
@@ -4476,22 +4931,18 @@ return {
 
         // Calcular stock total
         let totalStock = 0;
-        Object.values(product.stock || {}).forEach(tallas => {
-          Object.values(tallas).forEach(cantidad => {
-            totalStock += cantidad;
-          });
-        });
+        Object.values(stockCalculado[product.modelo] || {}).forEach(tallas => {
+  Object.values(tallas).forEach(cantidad => { totalStock += cantidad; });
+});
 
         return product.activo && matchesSearch && totalStock > 0;
       })
       .sort((a, b) => {
         const getTotalStock = (product) => {
           let total = 0;
-          Object.values(product.stock || {}).forEach(tallas => {
-            Object.values(tallas).forEach(cantidad => {
-              total += cantidad;
-            });
-          });
+          Object.values(stockCalculado[product.modelo] || {}).forEach(tallas => {
+  Object.values(tallas).forEach(cantidad => { total += cantidad; });
+});
           return total;
         };
 
@@ -4500,11 +4951,9 @@ return {
       .map(product => {
         // Calcular stock total nuevamente para mostrar
         let totalStock = 0;
-        Object.values(product.stock || {}).forEach(tallas => {
-          Object.values(tallas).forEach(cantidad => {
-            totalStock += cantidad;
-          });
-        });
+        Object.values(stockCalculado[product.modelo] || {}).forEach(tallas => {
+  Object.values(tallas).forEach(cantidad => { totalStock += cantidad; });
+});
 
         return (
           <div
@@ -4526,7 +4975,7 @@ return {
 
               <div className="text-left flex-1">
                 <p className="text-2xl md:text-base font-medium">{product.modelo}</p>
-                <p className="text-xl md:text-sm text-emerald-600">
+                <p className="text-xl md:text-sm text-blue-600">
                   S/ {product.precio_venta} - Stock: {totalStock}
                 </p>
               </div>
@@ -4557,7 +5006,7 @@ return {
             return (
               <div className="space-y-3">
                 {/* Header del producto seleccionado */}
-                <div className="bg-black text-white rounded-lg p-3 border">
+                <div className="bg-blue-900 text-white rounded-lg p-3 border">
                   <div className="flex items-center gap-3">
                     {product.imagen && (
                       <img 
@@ -4568,7 +5017,7 @@ return {
                     )}
                     <div className="flex-1">
                       <p className="font-bold text-xl md:text-lg">{product.modelo}</p>
-                      <p className="text-base md:text-sm text-emerald-400">S/ {product.precio_venta}</p>
+                      <p className="text-xl md:text-base text-white">S/ {product.precio_venta}</p>
                     </div>
                   </div>
                 </div>
@@ -4588,13 +5037,13 @@ return {
       <tbody>
         {product.colors && product.colors
           .filter(color =>
-            (product.tallas?.length ? product.tallas : ['S','M','L','XL']).some(talla => (product.stock?.[color]?.[talla] || 0) > 0)
+            (product.tallas?.length ? product.tallas : ['S','M','L','XL']).some(talla => (stockCalculado[product.modelo]?.[color]?.[talla] || 0) > 0)
           )
           .map(color => (
             <tr key={color} className="hover:bg-gray-50">
               <td className="border p-2 md:p-2 font-medium sticky left-0 bg-white text-lg md:text-xs w-20 md:w-auto">{color}</td>
               {(product.tallas?.length ? product.tallas : ['S','M','L','XL']).map(talla => {
-                const stockDisponible = product.stock?.[color]?.[talla] || 0;
+                const stockDisponible = stockCalculado[product.modelo]?.[color]?.[talla] || 0;
                 const key = `${color}-${talla}`;
                 return (
                   <td key={talla} className="border p-2 md:p-2">
@@ -4655,7 +5104,7 @@ return {
     Object.entries(colorQuantities).forEach(([key, qty]) => {
       if (qty && parseInt(qty) > 0) {
         const [color, talla] = key.split('-');
-        const stockDisponible = product.stock?.[color]?.[talla] || 0;
+        const stockDisponible = stockCalculado[product.modelo]?.[color]?.[talla] || 0;
         if (parseInt(qty) <= stockDisponible) {
           const existingIndex = updatedCart.findIndex(
             item => item.productoId === product.id && item.color === color && item.talla === talla
@@ -4687,7 +5136,7 @@ return {
   disabled={!hasQuantity}
   className={`flex-1 px-4 py-2 rounded-lg font-medium text-xl ${
     hasQuantity
-      ? 'bg-black text-white hover:bg-gray-800'
+      ? 'bg-blue-950 text-white hover:bg-blue-800'
       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
   }`}
 >
@@ -4701,10 +5150,41 @@ return {
 
         {/* RIGHT: Cart & Checkout */}
         <div>
-          <h3 className="font-bold mb-3 text-2xl md:text-lg">Resumen de Compra</h3>
+          <div className="flex items-center justify-between mb-3">
+  <h3 className="font-bold text-2xl md:text-lg">Resumen de Compra</h3>
+  <label className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border-2 transition-all text-lg font-medium select-none ${
+    isAjusteInventario
+      ? 'bg-orange-50 border-orange-400 text-orange-700'
+      : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-400'
+  }`}>
+    <input
+      type="checkbox"
+      checked={isAjusteInventario}
+      onChange={(e) => {
+        setIsAjusteInventario(e.target.checked);
+        if (e.target.checked) {
+          setSelectedClient(null);
+          setClientSearch('');
+          setSalesChannel('AJUSTE');
+          setVentaPorCobrar('');
+        } else {
+          setSalesChannel('TIENDA');
+        }
+      }}
+      className="w-8 h-8 accent-orange-500"
+    />
+    Salida
+  </label>
+</div>
+
+{isAjusteInventario && (
+  <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-xl text-base text-orange-700 font-medium">
+    ⚠️ Modo ajuste activo — se registrará como <strong>Salida de Inventario</strong> con total S/ 0.00
+  </div>
+)}
 
           {/* Client Selection */}
-          <div className="mb-4">
+          <div className={`mb-4 transition-opacity ${isAjusteInventario ? 'opacity-30 pointer-events-none' : ''}`}>
             <label className="block text-2xl md:text-xl font-medium mb-1">Cliente *</label>
             <div className="relative">
               <input
@@ -4802,7 +5282,7 @@ return {
                   </button>
                   <button
                     onClick={addClient}
-                    className="flex-1 px-3 py-2 bg-black text-white rounded text-xl"
+                    className="flex-1 px-3 py-2 bg-blue-950 text-white rounded text-xl"
                   >
                     Guardar
                   </button>
@@ -4811,14 +5291,14 @@ return {
             </div>
           )}
 
-          <div className="mb-3">
+          <div className={`mb-3 transition-opacity ${isAjusteInventario ? 'opacity-30 pointer-events-none' : ''}`}>
             <label className="block text-2xl font-medium mb-1">Medio de Captación</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setSalesChannel('LIVE')}
                 className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-xl md:text-sm ${
                   salesChannel === 'LIVE'
-                    ? 'bg-black text-white'
+                    ? 'bg-blue-950 text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >
@@ -4828,7 +5308,7 @@ return {
                 onClick={() => setSalesChannel('TIENDA')}
                 className={`flex-1 py-3 md:py-2 rounded-lg font-medium text-xl md:text-sm ${
                   salesChannel === 'TIENDA'
-                    ? 'bg-black text-white'
+                    ? 'bg-blue-950 text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >
@@ -4866,7 +5346,7 @@ return {
         {items.map((item) => (
           <div key={item.index} className="flex items-center justify-between px-3 py-1.5 border-t">
             <div className="flex-1">
-              <span className="font-bold text-xl bg-black text-white px-1.5 py-0.5 rounded mr-1">{item.talla}</span>
+              <span className="font-bold text-xl bg-blue-950 text-white px-1.5 py-0.5 rounded mr-1">{item.talla}</span>
               <span className="text-gray-700 text-2xl">{item.color} x{item.quantity}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -4887,11 +5367,11 @@ return {
 
           {cart.length > 0 ? (
             <>
-              <div className="bg-black text-white p-3 rounded-lg mb-3">
+              <div className={`p-3 rounded-lg mb-3 ${isAjusteInventario ? 'bg-orange-500' : 'bg-blue-950'} text-white`}>
   <div className="flex justify-between items-center">
     <span className="font-bold text-xl">TOTAL:</span>
     <span className="font-bold text-2xl">
-      S/ {cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}
+      {isAjusteInventario ? 'S/ 0.00' : `S/ ${cart.reduce((sum, item) => sum + (item.precioVenta * item.quantity), 0).toFixed(2)}`}
     </span>
   </div>
   {(() => {
@@ -4907,7 +5387,7 @@ return {
   })()}
 </div>
 
-<div className="mb-3">
+<div className={`mb-3 transition-opacity ${isAjusteInventario ? 'opacity-30 pointer-events-none' : ''}`}>
   <label className="block text-xl font-medium mb-1 text-gray-700">Venta por Cobrar</label>
   <input
     type="number"
@@ -4925,10 +5405,10 @@ return {
   className={`w-full px-4 py-4 md:py-3 rounded-lg font-medium text-3xl md:text-sm text-white ${
     isProcessing
       ? 'bg-gray-400 cursor-not-allowed'
-      : 'bg-emerald-600 hover:bg-emerald-700'
+      : isAjusteInventario ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-700 hover:bg-blue-700'
   }`}
 >
-  {isProcessing ? '⏳ Procesando...' : 'Completar Venta'}
+  {isProcessing ? '⏳ Procesando...' : isAjusteInventario ? '🔧 Registrar Ajuste' : 'Completar Venta'}
 </button>
             </>
           ) : (
@@ -4940,11 +5420,12 @@ return {
       </div>
     </div>
   </div>
-)}
+  );
+})()}
 
 {/* MODAL: Confirmación de Venta */}
 {showSaleConfirm && saleConfirmData && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
       
       {/* Header */}
@@ -4997,7 +5478,7 @@ return {
 
       <button
         onClick={() => setShowSaleConfirm(false)}
-        className="w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
+        className="w-full px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-800 font-medium"
       >
         Cerrar
       </button>
@@ -5007,7 +5488,7 @@ return {
 
 {/* MODAL: Ver Venta */}
 {viewingSale && (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-base flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/70 backdrop-blur-base flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Detalle de Venta</h2>
@@ -5064,7 +5545,7 @@ return {
             return (
               <div key={talla} className="flex items-center justify-between px-3 py-2 border-t text-xl">
                 <div className="flex-1">
-                  <span className="font-bold text-xs bg-black text-white px-2 py-0.5 rounded mr-2">{talla}</span>
+                  <span className="font-bold text-xs bg-blue-950 text-white px-2 py-0.5 rounded mr-2">{talla}</span>
                   <span className="text-gray-700">
                     {colores.map((c, i) => (
                       <span key={i}>
@@ -5084,7 +5565,7 @@ return {
   </div>
 </div>
 
-        <div className="bg-black text-white p-4 rounded-lg">
+        <div className="bg-blue-950 text-white p-4 rounded-lg">
   {viewingSale.descuento > 0 && (
     <div className="flex justify-between items-center mb-2 text-red-300">
       <span className="text-lg">Descuento:</span>
@@ -5104,9 +5585,10 @@ return {
           if (!esDeHoy) return null;
           return (
             <button
-              onClick={() => {
+              onClick={async () => {
                 const pin = prompt('Ingresa el PIN de administrador:');
-                if (pin !== '1111') {
+                const { data: cfg } = await supabase.from('configuracion').select('pin_admin').limit(1).single();
+                if (pin !== cfg?.pin_admin) {
                   alert('PIN incorrecto.');
                   return;
                 }
@@ -5115,24 +5597,52 @@ return {
                 viewingSale.items.forEach(item => {
                   const product = products.find(p => p.modelo === item.modelo);
                   if (product) {
-                    const updatedStock = { ...product.stock };
+                    const updatedStock = JSON.parse(JSON.stringify(product.stock));
                     if (!updatedStock[item.color]) updatedStock[item.color] = {};
                     updatedStock[item.color][item.talla] = (updatedStock[item.color][item.talla] || 0) + item.quantity;
                     productUpdates.push({ id: product.id, stock: updatedStock });
                   }
                 });
-                Promise.all([
-                  supabase.from('sales').delete().eq('id', viewingSale.id),
-                  ...productUpdates.map(u => supabase.from('products').update({ stock: u.stock }).eq('id', u.id))
-                ]).then(() => {
-                  setSales(sales.filter(s => s.id !== viewingSale.id));
-                  setProducts(products.map(p => {
-                    const update = productUpdates.find(u => u.id === p.id);
-                    return update ? { ...p, stock: update.stock } : p;
-                  }));
-                  setViewingSale(null);
-                  alert('Venta eliminada y stock revertido.');
-                });
+                const { fecha, hora } = getPeruDateTime();
+const transaccionesReversion = viewingSale.items.map(item => ({
+  fecha,
+  hora,
+  tipo: 'REVERSION',
+modelo: item.modelo,
+color: item.color,
+talla: item.talla,
+cantidad: item.quantity,
+notes: `↩️ Reversión venta ${viewingSale.order_number}`,
+usuario: userName
+}));
+
+const [deleteResult, insertResult, ...stockResults] = await Promise.all([
+  supabase.from('sales').delete().eq('id', viewingSale.id),
+  supabase.from('stock_transactions').insert(transaccionesReversion),
+  ...productUpdates.map(u => supabase.from('products').update({ stock: u.stock }).eq('id', u.id))
+]);
+
+if (deleteResult?.error) {
+  alert('❌ Error al eliminar la venta: ' + deleteResult.error.message);
+  return;
+}
+if (insertResult?.error) {
+  alert('❌ Error al insertar reversión: ' + insertResult.error.message);
+  return;
+}
+const stockError = stockResults.find(r => r?.error);
+if (stockError) {
+  alert('❌ Error al actualizar stock: ' + stockError.error.message);
+  return;
+}
+
+setSales(sales.filter(s => s.id !== viewingSale.id));
+setProducts(products.map(p => {
+  const update = productUpdates.find(u => u.id === p.id);
+  return update ? { ...p, stock: update.stock } : p;
+}));
+setViewingSale(null);
+alert('Venta eliminada y stock revertido.');
               }}
               className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 flex items-center justify-center gap-2 text-lg"
             >
@@ -5145,7 +5655,7 @@ return {
         <div className="flex gap-2">
           <button
             onClick={() => downloadOrderNote(viewingSale)}
-            className="flex-1 px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-900 flex items-center justify-center gap-2 text-lg"
+            className="flex-1 px-4 py-2 bg-blue-950 text-white rounded-lg font-medium hover:bg-blue-800 flex items-center justify-center gap-2 text-lg"
           >
             <Download size={16} />
             PDF
@@ -5165,7 +5675,7 @@ return {
 
 {/* MODAL: Confirmar eliminar producto */}
 {showDeleteProduct && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/70 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
       <div className="text-center mb-5">
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -5196,7 +5706,7 @@ return {
 
 {/* MODAL: PIN Liquidar Stock */}
 {showPinLiquidar && productoALiquidar && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/70 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
       <div className="text-center mb-5">
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -5239,12 +5749,13 @@ return {
             const { fecha, hora } = getPeruDateTime();
             const stockEnCero = {};
             const transacciones = [];
+            const stockCalculadoLiquidar = calcularStockDesdeTransacciones();
             product.colors.forEach(color => {
               stockEnCero[color] = {};
               const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
               tallas.forEach(talla => {
                 stockEnCero[color][talla] = 0;
-                const stockActual = product.stock?.[color]?.[talla] || 0;
+                const stockActual = stockCalculadoLiquidar[product.modelo]?.[color]?.[talla] || 0;
                 if (stockActual > 0) {
                   transacciones.push({ fecha, hora, tipo: 'LIQUIDACION', modelo: product.modelo, color, talla, cantidad: -stockActual, notes: '🔴 Liquidación de stock' });
                 }
@@ -5277,7 +5788,7 @@ return {
 
 {/* MODAL: Ganancia Neta */}
 {showModalGananciaNeta && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+  <div className="fixed inset-0 bg-blue-950/70 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
       <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
         <h2 className="text-xl font-bold">💰 Ganancia Neta</h2>
@@ -5286,7 +5797,7 @@ return {
       <div className="p-4">
         {(() => {
           const { start, end } = getDateRangeForFilter(reportFilter);
-          const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end);
+          const ventasFiltradas = sales.filter(s => s.fecha >= start && s.fecha <= end && s.sales_channel !== 'AJUSTE');
 
           // Agrupar por día
           const porDia = {};
@@ -5328,7 +5839,7 @@ return {
 <div className="border rounded-xl overflow-x-auto">
   <table className="w-full text-sm">
     <thead>
-      <tr className="bg-black text-white">
+      <tr className="bg-blue-950 text-white">
         <th className="p-3 text-left whitespace-nowrap">Fecha</th>
         <th className="p-3 text-center whitespace-nowrap">Pedidos</th>
         <th className="p-3 text-center whitespace-nowrap">P.Venta</th>
@@ -5357,7 +5868,7 @@ return {
               </tr>
             );
           })}
-          <tr className="bg-black text-white font-bold">
+          <tr className="bg-blue-950 text-white font-bold">
             <td className="p-3 whitespace-nowrap">TOTAL</td>
             <td className="p-3 text-center whitespace-nowrap">{ventasFiltradas.length}</td>
             <td className="p-3 text-center whitespace-nowrap">S/ {totVendido.toFixed(2)}</td>

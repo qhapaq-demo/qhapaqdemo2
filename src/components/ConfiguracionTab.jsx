@@ -3,8 +3,9 @@ import {
   Settings, Archive, BarChart3, Users, Save, CheckCircle,
   Eye, EyeOff, Lock, UserPlus, Trash2, ShieldCheck, KeyRound, LogOut
 } from 'lucide-react';
+import { generarExcel } from './BackupTab';
 
-const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
+const ConfiguracionTab = ({ supabase, products, sales, clients, stockTransactions, onResetComplete, calcularStock, guardarSnapshotMensual }) => {
 
   // ── Perfil del negocio ────────────────────────────────────────
   const [config,      setConfig]      = useState({ nombre_negocio: '', tipo_documento: 'RUC', numero_documento: '', whatsapp: '', direccion: '', moneda: 'PEN', pin_admin: '1111' });
@@ -12,6 +13,9 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   const [guardado,    setGuardado]    = useState(false);
   const [configId,    setConfigId]    = useState(null);
   const [mostrarPlan, setMostrarPlan] = useState(false);
+  const [showPerfil, setShowPerfil] = useState(false);
+  const [showMiPlan, setShowMiPlan] = useState(false);
+  const [showPermisos, setShowPermisos] = useState(false);
 
   // ── PIN ───────────────────────────────────────────────────────
   const [showPinSection, setShowPinSection] = useState(false);
@@ -22,6 +26,20 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   const [showPinNuevo,   setShowPinNuevo]   = useState(false);
   const [pinMsg,         setPinMsg]         = useState(null);
   const [showOlvidePIN,  setShowOlvidePIN]  = useState(false);
+
+  // ── Reset ─────────────────────────────────────────────────────
+  const [showReset, setShowReset] = useState(false);
+  const [resetNivel, setResetNivel] = useState(null);
+  const [resetPin, setResetPin] = useState('');
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetProducto, setResetProducto] = useState('');
+  const [resetAlerta, setResetAlerta] = useState(null);  // 
+  const [resetLoading, setResetLoading] = useState(false);
+  const [showResetAuto, setShowResetAuto] = useState(false);
+  const [resetAutoPin, setResetAutoPin] = useState('');
+  const [resetAutoConfirm, setResetAutoConfirm] = useState('');
+  const [resetAutoLoading, setResetAutoLoading] = useState(false);
+  const [resetAutoAlerta, setResetAutoAlerta] = useState(null);
 
   // ── Cambiar contraseña propia ─────────────────────────────────
   const [showPwdSection, setShowPwdSection] = useState(false);
@@ -38,7 +56,6 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   const [userMsg,      setUserMsg]      = useState(null);
   const [loadingUser,  setLoadingUser]  = useState(false);
   const [resetPwdUser, setResetPwdUser] = useState(null);
-  const [resetMsg,     setResetMsg]     = useState(null);
 
   // ── Sesión ────────────────────────────────────────────────────
   const [userEmail, setUserEmail] = useState('');
@@ -116,13 +133,13 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   };
 
   const enviarRecuperacion = async (usuario) => {
-    setResetMsg(null);
+    setResetAlerta(null);
     const { error } = await supabase.auth.resetPasswordForEmail(usuario.email, { redirectTo: `${window.location.origin}/reset-password` });
     if (!error) {
-      setResetMsg({ tipo: 'ok', texto: `✅ Email enviado a ${usuario.email}` });
-      setTimeout(() => { setResetMsg(null); setResetPwdUser(null); }, 3500);
+      setResetAlerta({ tipo: 'ok', texto: `✅ Email enviado a ${usuario.email}` });
+      setTimeout(() => { setResetAlerta(null); setResetPwdUser(null); }, 3500);
     } else {
-      setResetMsg({ tipo: 'error', texto: error.message });
+      setResetAlerta({ tipo: 'error', texto: error.message });
     }
   };
 
@@ -140,10 +157,140 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
   };
 
   const ROL_BADGE = {
-    admin:    { label: 'Administrador', bg: 'bg-black text-white' },
+    admin:    { label: 'Administrador', bg: 'bg-blue-950 text-white' },
     vendedor1: { label: 'Vendedor1',      bg: 'bg-gray-200 text-gray-700' },
   };
   const msgStyle = (tipo) => tipo === 'ok' ? 'text-green-600' : 'text-red-600';
+
+  const estaEnFinDeCiclo = () => {
+  if (!config.fecha_inicio) return false;
+  const diaInicio = new Date(config.fecha_inicio + 'T00:00:00').getDate();
+  const diaHoy = new Date().getDate();
+  return diaHoy >= (diaInicio - 3) && diaHoy < diaInicio;
+};
+
+const mostrarBotonResetAuto = stockTransactions.length >= 2000 || estaEnFinDeCiclo();
+
+const ejecutarResetAuto = async () => {
+  setResetAutoAlerta(null);
+  const { data: cfg } = await supabase.from('configuracion').select('pin_admin').limit(1).single();
+  if (resetAutoPin !== cfg?.pin_admin) {
+    setResetAutoAlerta({ tipo: 'error', texto: '❌ PIN incorrecto.' }); return;
+  }
+  if (resetAutoConfirm !== 'CONFIRMAR') {
+    setResetAutoAlerta({ tipo: 'error', texto: '❌ Escribí CONFIRMAR exactamente.' }); return;
+  }
+  setResetAutoLoading(true);
+  try {
+    await generarExcel(supabase, () => {}, () => {}, null, null);
+    await guardarSnapshotMensual();
+    await supabase.from('stock_transactions').delete().neq('tipo', 'LIQUIDACION');
+    setResetAutoAlerta({ tipo: 'ok', texto: '✅ Backup descargado y transacciones limpiadas.' });
+    setResetAutoPin(''); setResetAutoConfirm('');
+    onResetComplete();
+    setTimeout(() => { setShowResetAuto(false); setResetAutoAlerta(null); }, 4000);
+  } catch (err) {
+    setResetAutoAlerta({ tipo: 'error', texto: '❌ Error: ' + err.message });
+  }
+  setResetAutoLoading(false);
+};
+
+  const ejecutarReset = async () => {
+  setResetAlerta(null);
+
+  const { data: cfg } = await supabase.from('configuracion').select('pin_admin').limit(1).single();
+  if (resetPin !== cfg?.pin_admin) {
+    setResetAlerta({ tipo: 'error', texto: '❌ PIN incorrecto.' });
+    return;
+  }
+
+  if (resetConfirmText !== 'CONFIRMAR') {
+    setResetAlerta({ tipo: 'error', texto: '❌ Debés escribir CONFIRMAR exactamente.' });
+    return;
+  }
+
+  setResetLoading(true);
+
+  try {
+    if (resetNivel === 1) {
+  if (!resetProducto) {
+    setResetAlerta({ tipo: 'error', texto: '❌ Seleccioná un producto o "Todos".' });
+    setResetLoading(false);
+    return;
+  }
+  if (resetProducto === 'TODOS') {
+    await supabase.from('stock_transactions').delete().neq('id', 0);
+    await supabase.from('sales').delete().neq('id', 0);
+    for (const product of products) {
+      const stockVacio = {};
+      product.colors?.forEach(color => {
+        stockVacio[color] = {};
+        const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
+        tallas.forEach(talla => { stockVacio[color][talla] = 0; });
+      });
+      await supabase.from('products').update({ stock: stockVacio }).eq('id', product.id);
+    }
+  } else {
+    await supabase.from('stock_transactions').delete().eq('modelo', resetProducto);
+    const ventasABorrar = sales.filter(s => 
+  s.items.some(i => i.modelo === resetProducto)
+).map(s => s.id);
+
+if (ventasABorrar.length > 0) {
+  await supabase.from('sales').delete().in('id', ventasABorrar);
+}
+    const product = products.find(p => p.modelo === resetProducto);
+    if (product) {
+      const stockVacio = {};
+      product.colors?.forEach(color => {
+        stockVacio[color] = {};
+        const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
+        tallas.forEach(talla => { stockVacio[color][talla] = 0; });
+      });
+      await supabase.from('products').update({ stock: stockVacio }).eq('id', product.id);
+    }
+  }
+
+    } else if (resetNivel === 2) {
+      await supabase.from('stock_transactions').delete().neq('id', 0);
+      await supabase.from('sales').delete().neq('id', 0);
+      await supabase.from('clients').delete().neq('id', 0);
+      await supabase.from('products').delete().neq('id', 0);
+
+    } else if (resetNivel === 3) {
+  const stockActual = calcularStock();
+  const snapshot = [];
+  const fecha = new Date().toISOString().split('T')[0];
+  const hora = new Date().toTimeString().slice(0,8);
+  for (const product of products) {
+    product.colors?.forEach(color => {
+      const tallas = product.tallas?.length ? product.tallas : ['S','M','L','XL'];
+      tallas.forEach(talla => {
+        const qty = stockActual[product.modelo]?.[color]?.[talla] || 0;
+        if (qty > 0) {
+          snapshot.push({ fecha, hora, tipo: 'INGRESO', modelo: product.modelo, color, talla, cantidad: qty, notes: '📸 Snapshot - Reset de Transacciones' });
+        }
+      });
+    });
+  }
+  await guardarSnapshotMensual();
+  await supabase.from('stock_transactions').delete().neq('id', 0);
+  if (snapshot.length > 0) await supabase.from('stock_transactions').insert(snapshot);
+}
+
+    setResetAlerta({ tipo: 'ok', texto: '✅ Reset ejecutado correctamente.' });
+    setResetPin('');
+    setResetConfirmText('');
+    setResetProducto('');
+    onResetComplete();
+    setTimeout(() => { setShowReset(false); setResetNivel(null); setResetAlerta(null); }, 3000);
+
+  } catch (error) {
+    setResetAlerta({ tipo: 'error', texto: '❌ Error: ' + error.message });
+  }
+
+  setResetLoading(false);
+};
 
   return (
     <div className="space-y-6">
@@ -151,7 +298,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
       {/* ── SESIÓN ACTIVA ──────────────────────────────────────── */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm">
+          <div className="w-9 h-9 rounded-full bg-blue-950 flex items-center justify-center text-white font-bold text-sm">
             {userEmail?.[0]?.toUpperCase() || 'A'}
           </div>
           <div>
@@ -166,16 +313,21 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
       </div>
 
       {/* ── PERFIL DEL NEGOCIO ─────────────────────────────────── */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center"><Settings size={20} className="text-blue-600" /></div>
-          <div><h2 className="text-2xl font-bold">Perfil del Negocio</h2><p className="text-gray-500 text-base">Información de tu empresa</p></div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-base font-medium text-gray-700 mb-1 block">Nombre del Negocio</label>
-            <input type="text" value={config.nombre_negocio || ''} onChange={(e) => setConfig({ ...config, nombre_negocio: e.target.value })} placeholder="Ej: Abermud" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-blue-400" />
-          </div>
+<div className="bg-white p-6 rounded-2xl shadow-sm border">
+  <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowPerfil(!showPerfil)}>
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center"><Settings size={20} className="text-blue-600" /></div>
+      <div><h2 className="text-2xl font-bold">Perfil del Negocio</h2><p className="text-gray-500 text-base">Información de tu empresa</p></div>
+    </div>
+    <span className="text-2xl text-gray-400">{showPerfil ? '−' : '+'}</span>
+      </div>
+  {showPerfil && (
+  <div className="mt-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className="text-base font-medium text-gray-700 mb-1 block">Nombre del Negocio</label>
+        <input type="text" value={config.nombre_negocio || ''} onChange={(e) => setConfig({ ...config, nombre_negocio: e.target.value })} placeholder="Ej: Abermud" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-blue-400" />
+      </div>
           <div>
             <label className="text-base font-medium text-gray-700 mb-1 block">Tipo de Documento</label>
             <div className="flex gap-2">
@@ -206,10 +358,12 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
             </select>
           </div>
         </div>
-        <button onClick={guardarConfig} disabled={guardando} className="mt-6 flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
+        <button onClick={guardarConfig} disabled={guardando} className="mt-6 flex items-center gap-2 bg-blue-950 text-white px-6 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
           {guardado ? <><CheckCircle size={16} /> ¡Guardado!</> : guardando ? 'Guardando...' : <><Save size={16} /> Guardar Cambios</>}
         </button>
-      </div>
+    </div>
+  )}
+</div>
 
       {/* ── MI CONTRASEÑA ──────────────────────────────────────── */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border">
@@ -240,7 +394,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
               </div>
             </div>
             {pwdMsg && <p className={`text-sm font-medium ${msgStyle(pwdMsg.tipo)}`}>{pwdMsg.texto}</p>}
-            <button onClick={cambiarPassword} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors">
+            <button onClick={cambiarPassword} className="flex items-center gap-2 bg-blue-950 text-white px-5 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors">
               <KeyRound size={15} /> Actualizar contraseña
             </button>
           </div>
@@ -324,7 +478,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
             <div><h2 className="text-2xl font-bold">Usuarios</h2><p className="text-gray-500 text-base">Máximo 2 usuarios en tu plan actual</p></div>
           </div>
           {usuarios.filter(u => u.activo).length < 2 && (
-            <button onClick={() => { setShowAddUser(!showAddUser); setUserMsg(null); }} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            <button onClick={() => { setShowAddUser(!showAddUser); setUserMsg(null); }} className="flex items-center gap-2 bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
               <UserPlus size={15} /> Agregar usuario
             </button>
           )}
@@ -350,7 +504,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
                   {u.activo && (
                     <div className="flex items-center gap-2">
                       {u.rol === 'vendedor1' && (
-                        <button onClick={() => { setResetPwdUser(resetPwdUser?.id === u.id ? null : u); setResetMsg(null); }} title="Enviar recuperación de contraseña"
+                        <button onClick={() => { setResetPwdUser(resetPwdUser?.id === u.id ? null : u); setResetAlerta(null); }} title="Enviar recuperación de contraseña"
                           className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                           <KeyRound size={15} />
                         </button>
@@ -371,10 +525,10 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
                     <p className="text-xs text-blue-600">Se enviará un email a <strong>{u.email}</strong> con el enlace para crear una nueva contraseña.</p>
                     {resetMsg && <p className={`text-sm font-medium ${msgStyle(resetMsg.tipo)}`}>{resetMsg.texto}</p>}
                     <div className="flex gap-2">
-                      <button onClick={() => enviarRecuperacion(u)} className="flex items-center gap-1 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                      <button onClick={() => enviarRecuperacion(u)} className="flex items-center gap-1 bg-blue-950 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
                         <KeyRound size={13} /> Enviar email de recuperación
                       </button>
-                      <button onClick={() => { setResetPwdUser(null); setResetMsg(null); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Cancelar</button>
+                      <button onClick={() => { setResetPwdUser(null); setResetAlerta(null); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Cancelar</button>
                     </div>
                   </div>
                 )}
@@ -411,7 +565,7 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={crearUsuario} disabled={loadingUser} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-base font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50">
+              <button onClick={crearUsuario} disabled={loadingUser} className="flex items-center gap-2 bg-blue-950 text-white px-5 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
                 <UserPlus size={15} /> {loadingUser ? 'Creando...' : 'Crear usuario'}
               </button>
               <button onClick={() => { setShowAddUser(false); setNuevoUser({ email: '', password: '', rol: 'vendedor1' }); }} className="px-4 py-2 border border-gray-200 rounded-lg text-base text-gray-600 hover:bg-gray-50">Cancelar</button>
@@ -442,11 +596,16 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
       </div>
 
       {/* ── MI PLAN ────────────────────────────────────────────── */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center"><Archive size={20} className="text-purple-600" /></div>
-          <div><h2 className="text-2xl font-bold">Mi Plan</h2><p className="text-gray-500 text-base">Detalles de tu suscripción</p></div>
-        </div>
+<div className="bg-white p-6 rounded-xl shadow-sm border">
+  <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowMiPlan(!showMiPlan)}>
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center"><Archive size={20} className="text-purple-600" /></div>
+      <div><h2 className="text-2xl font-bold">Mi Plan</h2><p className="text-gray-500 text-base">Detalles de tu suscripción</p></div>
+    </div>
+    <span className="text-2xl text-gray-400">{showMiPlan ? '−' : '+'}</span>
+  </div>
+  {showMiPlan && (
+    <div className="mt-4">
         <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -468,8 +627,10 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
               <p className="text-purple-600 text-sm mt-1">Estamos preparando algo increíble. Te avisamos muy pronto 🎉</p>
             </div>
           )}
+          </div>
         </div>
-      </div>
+      )}
+    </div>
 
       {/* ── ESTADÍSTICAS ───────────────────────────────────────── */}
       <div className="bg-white p-6 rounded-xl shadow-sm border">
@@ -487,15 +648,20 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
 
       {/* ── PERMISOS DE VENDEDOR ─────────────────────────────── */}
 <div className="bg-white p-6 rounded-2xl shadow-sm border">
-  <div className="flex items-center gap-3 mb-6">
-    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-      <ShieldCheck size={20} className="text-green-600" />
+  <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowPermisos(!showPermisos)}>
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+        <ShieldCheck size={20} className="text-green-600" />
+      </div>
+      <div>
+        <h2 className="text-2xl font-bold">Permisos de Vendedor</h2>
+        <p className="text-gray-500 text-base">Define qué puede ver y hacer tu vendedor</p>
+      </div>
     </div>
-    <div>
-      <h2 className="text-2xl font-bold">Permisos de Vendedor</h2>
-      <p className="text-gray-500 text-base">Define qué puede ver y hacer tu vendedor</p>
-    </div>
+    <span className="text-2xl text-gray-400">{showPermisos ? '−' : '+'}</span>
   </div>
+  {showPermisos && (
+    <div className="mt-4">
 
   <div className="space-y-3">
     {[
@@ -539,6 +705,166 @@ const ConfiguracionTab = ({ supabase, products, sales, clients }) => {
     className="mt-6 flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg text-base font-medium hover:bg-green-700 transition-colors disabled:opacity-50">
     {guardado ? <><CheckCircle size={16} /> ¡Guardado!</> : guardando ? 'Guardando...' : <><Save size={16} /> Guardar Permisos</>}
   </button>
+    </div>
+  )}
+</div>
+
+{/* ── RESET AUTOMÁTICO ─────────────────────────────────────── */}
+{mostrarBotonResetAuto && (
+  <div className="bg-white p-6 rounded-2xl shadow-sm border border-orange-200">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+          <Archive size={20} className="text-orange-600" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-orange-700">🔄 Backup + Limpiar Transacciones</h2>
+          <p className="text-gray-500 text-base">Descarga Excel y borra movimientos (conserva LIQUIDACIONES)</p>
+        </div>
+      </div>
+      <button onClick={() => { setShowResetAuto(!showResetAuto); setResetAutoAlerta(null); }}
+        className="text-sm text-orange-600 hover:underline font-medium">
+        {showResetAuto ? 'Cancelar' : 'Abrir'}
+      </button>
+    </div>
+
+    {showResetAuto && (
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+        <p className="text-base text-orange-800 font-medium">
+          📦 Se descargará el Excel completo y luego se borrarán todas las transacciones <strong>excepto LIQUIDACIONES</strong>.
+        </p>
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">PIN de Administrador</label>
+          <input type="password" value={resetAutoPin} onChange={(e) => setResetAutoPin(e.target.value)}
+            placeholder="••••" maxLength={8}
+            className="w-48 border border-gray-200 rounded-lg px-3 py-2 text-base font-mono focus:outline-none focus:border-orange-400" />
+        </div>
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">Escribí <strong>CONFIRMAR</strong> para continuar</label>
+          <input type="text" value={resetAutoConfirm} onChange={(e) => setResetAutoConfirm(e.target.value)}
+            placeholder="CONFIRMAR"
+            className="w-48 border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-orange-400" />
+        </div>
+        {resetAutoAlerta && (
+          <p className={`text-sm font-medium ${resetAutoAlerta.tipo === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+            {resetAutoAlerta.texto}
+          </p>
+        )}
+        <button onClick={ejecutarResetAuto} disabled={resetAutoLoading}
+          className="flex items-center gap-2 bg-orange-600 text-white px-6 py-2 rounded-lg text-lg font-medium hover:bg-orange-700 transition-colors disabled:opacity-50">
+          {resetAutoLoading ? '⏳ Procesando...' : '🔄 Ejecutar Backup + Limpiar'}
+        </button>
+      </div>
+    )}
+  </div>
+)}
+
+{/* ── RESET DE DATOS ───────────────────────────────────────── */}
+<div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200">
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+        <Trash2 size={20} className="text-red-600" />
+      </div>
+      <div>
+        <h2 className="text-2xl font-bold text-red-700">Reset de Datos</h2>
+        <p className="text-gray-500 text-base">Acción irreversible — requiere PIN</p>
+      </div>
+    </div>
+    <button onClick={() => { setShowReset(!showReset); setResetNivel(null); setResetAlerta(null); }}
+      className="text-sm text-red-600 hover:underline font-medium">
+      {showReset ? 'Cancelar' : 'Ver opciones'}
+    </button>
+  </div>
+
+  {showReset && (
+    <div className="space-y-4">
+
+      {/* Selección de nivel */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[
+          { nivel: 1, titulo: '🗂️ Reset Inventario', desc: 'Borra transacciones y ventas. Productos y clientes se mantienen.' },
+          { nivel: 2, titulo: '💣 Reset Total', desc: 'Borra todo. APP queda vacía lista para llenar.' },
+          { nivel: 3, titulo: '🔄 Reset de Transacciones', desc: 'Borra todos los movimientos de stock. Stock actual se conserva. Ventas se mantienen.' },
+        ].map(({ nivel, titulo, desc }) => (
+          <button key={nivel}
+            onClick={() => { setResetNivel(nivel); setResetPin(''); setResetConfirmText(''); setResetProducto(''); setResetAlerta(null); }}
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
+              resetNivel === nivel
+                ? 'border-red-500 bg-red-50'
+                : 'border-gray-200 hover:border-red-300'
+            }`}>
+            <p className="font-bold text-base mb-1">{titulo}</p>
+            <p className="text-xs text-gray-500">{desc}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Formulario de confirmación */}
+      {resetNivel && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+          
+          {/* Selector de producto para Nivel 1 y 3 */}
+          {resetNivel === 1 && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Seleccionar Producto</label>
+              <select value={resetProducto} onChange={(e) => setResetProducto(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-red-400">
+                <option value="">-- Seleccionar --</option>
+{resetNivel === 1 && <option value="TODOS">🗂️ Todos los productos</option>}
+{(() => {
+  const stockCalc = calcularStock();
+  return [...products]
+    .map(p => ({
+      ...p,
+      totalUnidades: Object.values(stockCalc[p.modelo] || {})
+        .flatMap(colores => Object.values(colores))
+        .reduce((sum, qty) => sum + qty, 0)
+    }))
+    .sort((a, b) => b.totalUnidades - a.totalUnidades)
+    .map(p => (
+      <option key={p.id} value={p.modelo}>
+        {p.modelo} ({p.totalUnidades})
+      </option>
+    ));
+})()}
+              </select>
+            </div>
+          )}
+
+          {/* PIN */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">PIN de Administrador</label>
+            <input type="password" value={resetPin} onChange={(e) => setResetPin(e.target.value)}
+              placeholder="••••" maxLength={8}
+              className="w-48 border border-gray-200 rounded-lg px-3 py-2 text-base font-mono focus:outline-none focus:border-red-400" />
+          </div>
+
+          {/* Confirmación texto */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">
+              Escribí <strong>CONFIRMAR</strong> para continuar
+            </label>
+            <input type="text" value={resetConfirmText} onChange={(e) => setResetConfirmText(e.target.value)}
+              placeholder="CONFIRMAR"
+              className="w-48 border border-gray-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:border-red-400" />
+          </div>
+
+          {resetAlerta && (
+            <p className={`text-sm font-medium ${resetAlerta.tipo === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+              {resetAlerta.texto}
+            </p>
+          )}
+
+          <button onClick={ejecutarReset} disabled={resetLoading}
+            className="flex items-center gap-2 bg-red-600 text-white px-6 py-2 rounded-lg text-base font-medium hover:bg-red-700 transition-colors disabled:opacity-50">
+            <Trash2 size={15} />
+            {resetLoading ? 'Ejecutando...' : 'Ejecutar Reset'}
+          </button>
+        </div>
+      )}
+    </div>
+  )}
 </div>
 
       {/* ── SOPORTE ────────────────────────────────────────────── */}

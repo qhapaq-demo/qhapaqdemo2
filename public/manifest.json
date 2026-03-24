@@ -1,19 +1,19 @@
 {
-  "name": "ABermud Inventario",
-  "short_name": "ABermud",
-  "description": "Sistema de inventario ABermud",
+  "name": "Qhapaq",
+  "short_name": "Qhapaq",
+  "description": "Sistema de Gestion de Inventario",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#F3F4F6",
+  "theme_color": "#172554",
   "icons": [
     {
-      "src": "/logo_Abermud.png",
+      "src": "/logo_Qhapaq_circular.png",
       "sizes": "200x200",
       "type": "image/png"
     },
     {
-      "src": "/logo_Abermud.png",
+      "src": "/logo_Qhapaq_circular.png",
       "sizes": "512x512",
       "type": "image/png"
     }

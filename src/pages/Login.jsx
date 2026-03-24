@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseConfig';
-import logoAbermud from '../logo_Abermud.jpg';
+import logoQhapaq from '../logo_Qhapaq_login.png';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -74,14 +74,13 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{backgroundColor: '#F3F4F6'}}>
+      <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-md">
 
         {/* LOGO */}
         <div className="text-center mb-8">
-          <img src={logoAbermud} alt="Abermud" className="w-60 h-60 object-contain mx-auto mb-3" />
-          <h1 className="text-4xl font-bold text-gray-900">Abermud</h1>
-          <p className="text-base text-gray-400 mt-1 tracking-widest">QHAPAQ</p>
+          <img src={logoQhapaq} alt="Qhapaq" className="w-90 h-90
+          object-contain mx-auto mb-3" />
         </div>
 
         {/* ── FORMULARIO LOGIN ── */}
@@ -89,7 +88,7 @@ const Login = () => {
           <>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-xl font-medium text-gray-700 mb-1 block">Usuario</label>
+                <label className="text-2xl font-semibold text-gray-700 mb-1 block">Usuario</label>
                 <input
                   type="text"
                   value={usuario}
@@ -101,7 +100,7 @@ const Login = () => {
               </div>
 
               <div>
-                <label className="text-xl font-medium text-gray-700 mb-1 block">Contraseña</label>
+                <label className="text-2xl font-semibold text-gray-700 mb-1 block">Contraseña</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -130,7 +129,7 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-black text-white py-4 rounded-xl font-medium text-xl hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="w-full bg-blue-900 text-white py-4 rounded-xl font-medium text-2xl hover:bg-blue-800 transition-colors disabled:opacity-50"
               >
                 {loading ? 'Ingresando...' : 'Ingresar'}
               </button>
@@ -138,7 +137,7 @@ const Login = () => {
 
             <button
               onClick={() => { setShowRecuperar(true); setError(''); }}
-              className="w-full text-center text-sm text-gray-400 hover:text-gray-600 mt-4 transition-colors"
+              className="w-full text-center text-xl text-gray-400 hover:text-gray-600 mt-4 transition-colors"
             >
               ¿Olvidaste tu contraseña?
             </button>
@@ -147,19 +146,19 @@ const Login = () => {
           <>
             <div className="mb-4">
               <h2 className="text-xl font-bold text-gray-800">Recuperar contraseña</h2>
-              <p className="text-sm text-gray-500 mt-1">Ingresa tu email y te enviaremos un enlace para restablecerla.</p>
+              <p className="text-base text-gray-500 mt-1">Ingresa tu email y te enviaremos un enlace para restablecerla.</p>
             </div>
 
             <form onSubmit={handleRecuperar} className="space-y-4">
               <div>
-                <label className="text-base font-medium text-gray-700 mb-1 block">Email</label>
+                <label className="text-2xl font-semibold text-gray-700 mb-1 block">Email</label>
                 <input
                   type="email"
                   value={emailRecuperar}
                   onChange={(e) => setEmailRecuperar(e.target.value)}
                   placeholder="tu@email.com"
                   required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-gray-400"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:border-gray-400"
                 />
               </div>
 
@@ -172,7 +171,7 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={loadingRecuperar}
-                className="w-full bg-black text-white py-3 rounded-xl font-medium text-base hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="w-full bg-blue-900 text-white py-3 rounded-xl font-medium text-xl hover:bg-blue-800 transition-colors disabled:opacity-50"
               >
                 {loadingRecuperar ? 'Enviando...' : 'Enviar enlace de recuperación'}
               </button>
@@ -180,14 +179,14 @@ const Login = () => {
 
             <button
               onClick={() => { setShowRecuperar(false); setRecuperarMsg(null); setEmailRecuperar(''); }}
-              className="w-full text-center text-sm text-gray-400 hover:text-gray-600 mt-4 transition-colors"
+              className="w-full text-center text-xl text-gray-400 hover:text-gray-600 mt-4 transition-colors"
             >
               ← Volver al login
             </button>
           </>
         )}
 
-        <p className="text-center text-base text-gray-300 mt-6 tracking-widest">Powered by QHAPAQ</p>
+        <p className="text-center text-lg text-gray-300 mt-6 tracking-widest">Powered by QHAPAQ</p>
       </div>
     </div>
   );

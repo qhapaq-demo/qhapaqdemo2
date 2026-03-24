@@ -82,8 +82,7 @@ const setWidths = (ws, widths) => {
 };
 
 // ── Generador principal ────────────────────────────────────────────
-const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHasta) => {
-  const wb = new ExcelJS.Workbook();
+export const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHasta) => {  const wb = new ExcelJS.Workbook();
   wb.creator = 'Qhapaq System';
 
   // 1. Fetch datos
@@ -131,7 +130,7 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
     Object.entries(p.stock).forEach(([color, tallas]) => {
       if (typeof tallas !== 'object') return;
       Object.entries(tallas).forEach(([talla, qty]) => {
-        stockDetalle.push([p.modelo || '', color, talla, Number(qty) || 0, fmtSol(p.precio), fmtSol((Number(qty)||0)*(p.precio||0))]);
+        stockDetalle.push([p.modelo || '', color, talla, Number(qty) || 0, fmtSol(p.precio_venta), fmtSol((Number(qty)||0)*(p.precio_venta||0))]);
       });
     });
   });
@@ -156,13 +155,14 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
   setProgreso('Generando Ventas...'); setPct(60);
   {
     const ws = wb.addWorksheet('Ventas');
-    const headers = ['N° Pedido','Fecha','Hora','Cliente','DNI','Teléfono','Departamento','Canal','Artículos','Total S/','Descuento S/','Cobrado S/'];
+    const headers = ['N° Pedido','Fecha','Hora','Cliente','DNI','Teléfono','Departamento','Canal','Vendedor','Artículos','Total S/','Descuento S/','Cobrado S/'];
     addTitle(ws, '📦  ABERMUD — Historial de Ventas', `Período: ${fmtFecha(fechaDesde)} al ${fmtFecha(fechaHasta)}`, '1D4ED8', headers.length);
     addHeaders(ws, headers, '1D4ED8');
     const rows = ventas.map(v => [
       v.order_number || '', fmtFecha(v.fecha), v.hora || '', v.client_name || '',
       v.client_dni || '', v.client_phone || '', v.client_department || '',
       v.sales_channel || 'TIENDA',
+      v.Vendedor || '',
       (v.items || []).reduce((s, i) => s + (i.quantity || 0), 0),
       fmtSol(v.total), fmtSol(v.descuento),
       fmtSol((v.total || 0) - (v.descuento || 0)),
@@ -171,7 +171,7 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
       const isDesc = ci === 10 && val !== 'S/ 0.00';
       applyData(cell, ri, ci === 0 || ci === 9 || ci === 11, isDesc ? 'DC2626' : (ci === 0 ? '1D4ED8' : '1A1A1A'), ci >= 8);
     });
-    setWidths(ws, [13,12,8,20,12,13,13,12,10,12,13,12]);
+    setWidths(ws, [13,12,8,20,12,13,13,12,14,10,12,13,12]);
   }
 
   // ── HOJA 2: DETALLE VENTAS ─────────────────────────────────────
@@ -202,7 +202,7 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
     const rows = productos.map(p => {
       const tot = Object.values(p.stock||{}).reduce((t, tallas) =>
         t + (typeof tallas==='object' ? Object.values(tallas).reduce((s,q)=>s+(Number(q)||0),0) : 0), 0);
-      return [p.modelo||'', fmtSol(p.precio), fmtSol(p.precioCompra), (p.colors||[]).join(', '), (p.tallas||[]).join(', '), p.activo?'✅ Sí':'❌ No', tot, fmtSol(tot*(p.precio||0))];
+      return [p.modelo||'', fmtSol(p.precio_venta), fmtSol(p.precio_compra), (p.colors||[]).join(', '), (p.tallas||[]).join(', '), p.activo?'✅ Sí':'❌ No', tot, fmtSol(tot*(p.precio||0))];
     });
     addDataRows(ws, rows, (cell, ri, ci, val) => {
       const color = ci===5 ? (String(val).includes('Sí')?'16A34A':'DC2626') : '1A1A1A';
@@ -246,8 +246,141 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
     setWidths(ws, [22,12,13,26,14,12,16]);
   }
 
-  // ── HOJA 7: ANÁLISIS ───────────────────────────────────────────
-  setProgreso('Generando Análisis...'); setPct(88);
+  // ── HOJA 7: RESUMEN POR VENDEDOR ──────────────────────────────
+setProgreso('Generando Resumen por Vendedor...'); setPct(86);
+{
+  const ws = wb.addWorksheet('Resumen Vendedores');
+  const headers = ['Vendedor','N° Pedidos','Total Vendido S/','Ticket Promedio S/','Ajustes de Inventario'];
+  addTitle(ws, '👤  ABERMUD — Resumen por Vendedor', 'Desempeño individual del equipo de ventas', '1D4ED8', headers.length);
+  addHeaders(ws, headers, '1D4ED8');
+
+  const porVendedor = {};
+  ventas.forEach(v => {
+    const vendedor = v.Vendedor || 'Sin asignar';
+    const esAjuste = v.sales_channel === 'AJUSTE';
+    if (!porVendedor[vendedor]) porVendedor[vendedor] = { pedidos: 0, total: 0, ajustes: 0 };
+    if (esAjuste) {
+      porVendedor[vendedor].ajustes++;
+    } else {
+      porVendedor[vendedor].pedidos++;
+      porVendedor[vendedor].total += v.total || 0;
+    }
+  });
+
+  const rows = Object.entries(porVendedor)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([vendedor, d]) => [
+      vendedor,
+      d.pedidos,
+      fmtSol(d.total),
+      fmtSol(d.pedidos > 0 ? d.total / d.pedidos : 0),
+      d.ajustes
+    ]);
+
+  addDataRows(ws, rows, (cell, ri, ci) => applyData(cell, ri, ci === 2 || ci === 3, '1A1A1A', ci !== 0));
+  setWidths(ws, [20, 12, 18, 18, 20]);
+}
+
+// ── HOJA 8: AJUSTES DE INVENTARIO ─────────────────────────────
+setProgreso('Generando Ajustes de Inventario...'); setPct(88);
+{
+  const ws = wb.addWorksheet('Ajustes Inventario');
+  const headers = ['N° Pedido','Fecha','Hora','Vendedor','Modelo','Color','Talla','Cantidad'];
+  addTitle(ws, '🔧  ABERMUD — Ajustes de Inventario', 'Descuentos manuales de stock sin venta real', 'EA580C', headers.length);
+  addHeaders(ws, headers, 'EA580C');
+
+  const ajustes = ventasTodas.filter(v => v.sales_channel === 'AJUSTE');
+  const rows = [];
+  ajustes.forEach(v => {
+    (v.items || []).forEach(item => {
+      rows.push([
+        v.order_number || '',
+        fmtFecha(v.fecha),
+        v.hora || '',
+        v.Vendedor || '',
+        item.modelo || '',
+        item.color || '',
+        item.talla || '',
+        item.quantity || 0
+      ]);
+    });
+  });
+
+  if (rows.length === 0) {
+    rows.push(['Sin ajustes en el período', '', '', '', '', '', '', '']);
+  }
+
+  addDataRows(ws, rows, (cell, ri, ci) => applyData(cell, ri, ci === 0, '1A1A1A', ci >= 2));
+  setWidths(ws, [14, 12, 8, 16, 26, 14, 8, 10]);
+}
+
+// ── HOJA 9: ESTADO DE INVENTARIO MENSUAL ──────────────────────
+setProgreso('Generando Estado de Inventario...'); setPct(90);
+{
+  const ws = wb.addWorksheet('Estado Inventario');
+  const headers = ['Modelo','P. Compra S/','P. Venta S/','Ingresos Uds','Correcciones','Reversiones','Ventas','Liquidaciones','Ajustes','Stock Final','Valor Compra S/','Valor Venta S/','Margen S/'];
+  addTitle(ws, '📦  ABERMUD — Estado de Inventario Mensual', `Período: ${fmtFecha(fechaDesde)} al ${fmtFecha(fechaHasta)}`, '16A34A', headers.length);
+  addHeaders(ws, headers, '16A34A');
+
+  const rows = productos.map(p => {
+    const movsProd = movimientos.filter(m => m.modelo === p.modelo);
+    const ingresos    = movsProd.filter(m => m.tipo === 'INGRESO' && m.cantidad > 0).reduce((s, m) => s + m.cantidad, 0);
+    const correcciones = movsProd.filter(m => m.tipo === 'INGRESO' && m.cantidad < 0).reduce((s, m) => s + m.cantidad, 0);
+    const reversiones = movsProd.filter(m => m.tipo === 'REVERSION').reduce((s, m) => s + m.cantidad, 0);
+    const ventas      = movsProd.filter(m => m.tipo === 'SALIDA' && m.notes !== 'SALIDA DE INVENTARIO').reduce((s, m) => s + m.cantidad, 0);
+    const liquidaciones = movsProd.filter(m => m.tipo === 'LIQUIDACION').reduce((s, m) => s + Math.abs(m.cantidad), 0);
+    const ajustes     = movsProd.filter(m => m.tipo === 'SALIDA' && m.notes === 'SALIDA DE INVENTARIO').reduce((s, m) => s + m.cantidad, 0);
+    const stockFinal  = Object.values(p.stock || {}).reduce((t, tallas) =>
+      t + (typeof tallas === 'object' ? Object.values(tallas).reduce((s, q) => s + (Number(q) || 0), 0) : 0), 0);
+    const valorCompra = stockFinal * (p.precio_compra || 0);
+    const valorVenta  = stockFinal * (p.precio_venta || 0);
+    const margen      = valorVenta - valorCompra;
+
+    return [
+      p.modelo || '',
+      fmtSol(p.precio_compra),
+      fmtSol(p.precio_venta),
+      ingresos,
+      correcciones,
+      reversiones,
+      ventas,
+      liquidaciones,
+      ajustes,
+      stockFinal,
+      fmtSol(valorCompra),
+      fmtSol(valorVenta),
+      fmtSol(margen)
+    ];
+  });
+
+  // Fila totales
+  const totales = [
+    'TOTAL', '', '',
+    rows.reduce((s, r) => s + r[3], 0),
+    rows.reduce((s, r) => s + r[4], 0),
+    rows.reduce((s, r) => s + r[5], 0),
+    rows.reduce((s, r) => s + r[6], 0),
+    rows.reduce((s, r) => s + r[7], 0),
+    rows.reduce((s, r) => s + r[8], 0),
+    rows.reduce((s, r) => s + r[9], 0),
+    fmtSol(rows.reduce((s, r) => s + parseFloat(r[10].replace('S/ ','')), 0)),
+    fmtSol(rows.reduce((s, r) => s + parseFloat(r[11].replace('S/ ','')), 0)),
+    fmtSol(rows.reduce((s, r) => s + parseFloat(r[12].replace('S/ ','')), 0)),
+  ];
+
+  addDataRows(ws, [...rows, totales], (cell, ri, ci, val) => {
+    const isTotal = ri === rows.length;
+    cell.font = { name: 'Arial', size: 9, bold: isTotal || ci === 0 || ci >= 10, color: { argb: isTotal ? 'FFFFFFFF' : '1A1A1A' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isTotal ? 'FF16A34A' : altBg(ri) } };
+    cell.alignment = { horizontal: ci === 0 ? 'left' : 'center', vertical: 'middle' };
+    cell.border = BORDER;
+  });
+
+  setWidths(ws, [28, 14, 14, 13, 14, 13, 10, 14, 10, 12, 16, 16, 14]);
+}
+
+  // ── HOJA 10: ANÁLISIS ───────────────────────────────────────────
+  setProgreso('Generando Análisis...'); setPct(91);
   {
     const ws = wb.addWorksheet('Análisis Ventas');
     const headers = ['#','Modelo','Unidades Vendidas','N° Pedidos','Ingresos S/'];
@@ -265,8 +398,8 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
     setWidths(ws, [5,28,18,12,14]);
   }
 
-  // ── HOJA 8: RESUMEN FINANCIERO ─────────────────────────────────
-  setProgreso('Generando Resumen Financiero...'); setPct(94);
+  // ── HOJA 11: RESUMEN FINANCIERO ─────────────────────────────────
+  setProgreso('Generando Resumen Financiero...'); setPct(95);
   {
     const ws = wb.addWorksheet('Resumen Financiero');
     ws.getColumn(1).width = 30;
@@ -353,7 +486,7 @@ const generarExcel = async (supabase, setProgreso, setPct, fechaDesde, fechaHast
 // ═══════════════════════════════════════════════════════════════════
 //  COMPONENTE
 // ═══════════════════════════════════════════════════════════════════
-const BackupTab = ({ supabase }) => {
+const BackupTab = ({ supabase, stockMensualData = [], productos = [] }) => {
   const [descargando, setDescargando] = useState(false);
   const [progreso,    setProgreso]    = useState('');
   const [pct,         setPct]         = useState(0);
@@ -386,6 +519,9 @@ const BackupTab = ({ supabase }) => {
     { icon: <Users      size={18} className="text-purple-600"/>, bg:'bg-purple-50', label:'Clientes',           desc:'Lista con historial de compras' },
     { icon: <BarChart3  size={18} className="text-purple-600"/>, bg:'bg-purple-50', label:'Análisis Ventas',    desc:'Ranking de modelos' },
     { icon: <DollarSign size={18} className="text-orange-600"/>, bg:'bg-orange-50', label:'Resumen Financiero', desc:'Indicadores clave del negocio' },
+    { icon: <Users size={18} className="text-blue-600"/>, bg:'bg-blue-50', label:'Resumen Vendedores', desc:'Desempeño individual del equipo' },
+    { icon: <FileText size={18} className="text-orange-600"/>, bg:'bg-orange-50', label:'Ajustes Inventario', desc:'Descuentos manuales de stock' },
+    { icon: <Package size={18} className="text-green-600"/>, bg:'bg-green-50', label:'Estado Inventario', desc:'Resumen mensual por producto' },
   ];
 
   return (
@@ -463,7 +599,7 @@ const BackupTab = ({ supabase }) => {
           {descargando ? 'Generando backup...' : 'Descargar Backup Excel'}
         </button>
 
-        <p className="text-sm text-gray-400 mt-3">💡 Se descargará directo a tu carpeta Descargas con 8 hojas y colores</p>
+        <p className="text-sm text-gray-400 mt-3">💡 Se descargará directo a tu carpeta Descargas con 11 hojas y colores</p>
       </div>
 
       <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
