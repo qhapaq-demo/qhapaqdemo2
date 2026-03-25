@@ -4,7 +4,7 @@
   "description": "Sistema de Gestion de Inventario",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#F3F4F6",
   "theme_color": "#F3F4F6",
   "icons": [
     {
