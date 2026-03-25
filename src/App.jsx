@@ -1044,11 +1044,10 @@ const getVentaDetailByDate = (fecha, modelo) => {
     .sort()
     .pop() || null;
 
-    const ventasDelDia = sales.filter(s => 
-    s.fecha === fecha && 
+  const ventasDelDia = sales.filter(s =>
+    s.fecha === fecha &&
     s.items.some(i => i.modelo === modelo) &&
-    s.sales_channel !== 'AJUSTE' &&
-    (!ultimaLiq || (s.hora || '00:00:00') >= ultimaLiq)
+    s.sales_channel !== 'AJUSTE'
   );
 
   const operaciones = ventasDelDia.map(venta => ({
@@ -1059,11 +1058,13 @@ const getVentaDetailByDate = (fecha, modelo) => {
     items: venta.items.filter(i => i.modelo === modelo)
   })).sort((a, b) => a.hora.localeCompare(b.hora));
 
-  const totalUnidades = operaciones.reduce((sum, op) => 
-    sum + op.items.reduce((s, i) => s + i.quantity, 0), 0
-  );
+  const totalUnidades = operaciones
+    .filter(op => !ultimaLiq || op.hora >= ultimaLiq)
+    .reduce((sum, op) =>
+      sum + op.items.reduce((s, i) => s + i.quantity, 0), 0
+    );
 
-  return { fecha, modelo, operaciones, totalUnidades };
+  return { fecha, modelo, operaciones, totalUnidades, ultimaLiq };
 };
 
   const getSalidaVentasReport = () => {
@@ -4687,47 +4688,56 @@ comprado += compra * (item.quantity || 0);
         </p>
       </div>
 
-      {(() => {
-  const liq = stockTransactions
-    .filter(t => t.tipo === 'LIQUIDACION' && t.modelo === ventaDetailData.modelo && t.fecha === ventaDetailData.fecha)
-    .sort((a, b) => a.hora.localeCompare(b.hora))
-    .pop();
-  if (!liq) return null;
-  return (
-    <div className="flex items-center gap-2 bg-red-50 border border-red-300 rounded-lg px-3 py-2 mb-3 text-sm font-semibold text-red-700">
-      🔴 Liquidado a las {liq.hora} — ventas desde aquí
-    </div>
-  );
-})()}
-
-      {/* Detalle agrupado por talla */}
+      {/* Operaciones en orden cronológico con marcador de liquidación */}
 <div className="mb-4 space-y-2 max-h-60 overflow-y-auto">
   {(() => {
-    const grouped = {};
-    ventaDetailData.operaciones.forEach(op => {
+    const liqHora = ventaDetailData.ultimaLiq || null;
+    return ventaDetailData.operaciones.map((op, i) => {
+      const esPostLiq = !liqHora || op.hora >= liqHora;
+      const mostrarMarcador = liqHora &&
+        op.hora >= liqHora &&
+        (i === 0 || ventaDetailData.operaciones[i - 1].hora < liqHora);
+
+      // Agrupar colores de esta operación
+      const coloresPorTalla = {};
       op.items.forEach(item => {
-        if (!grouped[item.talla]) grouped[item.talla] = {};
-        if (!grouped[item.talla][item.color]) grouped[item.talla][item.color] = 0;
-        grouped[item.talla][item.color] += item.quantity;
+        if (!coloresPorTalla[item.talla]) coloresPorTalla[item.talla] = {};
+        if (!coloresPorTalla[item.talla][item.color])
+          coloresPorTalla[item.talla][item.color] = 0;
+        coloresPorTalla[item.talla][item.color] += item.quantity;
       });
+
+      const ordenTallas = ['ST','XS','S','M','L','XL','XXL','2','4','6','8','10','12','14','16','18','20','22','24','26','28','30','32','34','36','38','40'];
+
+      return (
+        <React.Fragment key={i}>
+          {mostrarMarcador && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-sm font-semibold text-red-700">
+              🔴 Liquidado a las {liqHora} — ventas desde aquí
+            </div>
+          )}
+          <div className={`text-base border rounded-lg px-3 py-2 ${esPostLiq ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
+            <p className="text-xs text-gray-400 mb-1">{op.hora}</p>
+            {Object.entries(coloresPorTalla)
+              .sort(([a], [b]) => {
+                const ia = ordenTallas.indexOf(a);
+                const ib = ordenTallas.indexOf(b);
+                return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+              })
+              .map(([talla, colores]) => (
+                <div key={talla} className="border-b border-gray-100 pb-1 last:border-0 last:pb-0">
+                  <span className="font-bold bg-black text-white px-2 py-0.5 rounded text-xs mr-2">{talla}</span>
+                  {Object.entries(colores).map(([color, qty], ci, arr) => (
+                    <span key={color}>
+                      {color} x{qty}{ci < arr.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </div>
+              ))}
+          </div>
+        </React.Fragment>
+      );
     });
-    const ordenTallas = ['ST','XS','S','M','L','XL','XXL','2','4','6','8','10','12','14','16','18','20','22','24','26','28','30','32','34','36','38','40'];
-    return Object.entries(grouped)
-      .sort(([a], [b]) => {
-        const ia = ordenTallas.indexOf(a);
-        const ib = ordenTallas.indexOf(b);
-        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-      })
-      .map(([talla, colores]) => (
-        <div key={talla} className="text-base border-b border-gray-100 pb-1">
-          <span className="font-bold bg-blue-950 text-white px-2 py-0.5 rounded text-sm mr-2">{talla}</span>
-          {Object.entries(colores).map(([color, qty], i, arr) => (
-            <span key={color}>
-              {color} x{qty}{i < arr.length - 1 ? ', ' : ''}
-            </span>
-          ))}
-        </div>
-      ));
   })()}
 </div>
 
