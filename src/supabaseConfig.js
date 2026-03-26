@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 // ✅ SEGURO: Las keys se leen desde variables de entorno (.env)
 // Crea un archivo .env en la raíz del proyecto con:
-//   VITE_SUPABASE_URL=https://svjerqqwqernlnpcgugx.supabase.co
-//   VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2amVycXF3cWVybmxucGNndWd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTc1OTUsImV4cCI6MjA4OTc5MzU5NX0.blbMbte7RYjDsAFt9J3CjlJ-4qdAfCSr79cANGZvlvs
+//   const supabaseUrl ='https://rxbbjnjurycggoxbshuo.supabase.co'
+//   const supabaseAnonKey ='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4YmJqbmp1cnljZ2dveGJzaHVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODE0NDcsImV4cCI6MjA5MDA1NzQ0N30.aext8fuNy5hwq797i3GeecrqPsKjsTVqfEEIMripfUY'
 // ⚠️ Asegúrate de que .env esté en tu .gitignore (nunca lo subas a GitHub)
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
