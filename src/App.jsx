@@ -1981,7 +1981,7 @@ const getStockClientesReport = () => {
           className="h-36 md:h-36 object-contain -ml-4"
         />
         <p className="text-base text-gray-700 font-semibold mt-1 mb-0.5 pl-1">
-          {config?.nombre_negocio || 'Prueba_Qhapaq'}
+          {config?.nombre_negocio || 'Qhapaq Demo'}
         </p>
       </button>
 
@@ -2895,7 +2895,7 @@ comprado += compra * (item.quantity || 0);
       <div className="bg-blue-900 text-white p-3 md:p-6 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl md:text-2xl font-bold">Qhapaq-Prueba</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Qhapaq</h1>
             <p className="text-base md:text-sm italic">Sistema de Gestión de Inventario</p>
             <p className="text-sm md:text-sm mt-1 md:mt-2 opacity-90">
               {showStockModal === 'stock_fecha' && 'Reporte de Stock Acumulado'}
