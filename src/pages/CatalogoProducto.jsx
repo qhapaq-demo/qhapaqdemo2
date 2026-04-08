@@ -27,6 +27,12 @@ const CatalogoProducto = () => {
     .from('color_swatches')
     .select('*')
     .eq('modelo', prod?.modelo);
+  
+  const { data: transactions } = await supabase
+  .from('stock_transactions')
+  .select('*')
+  .eq('modelo', prod?.modelo)
+  .order('fecha', { ascending: true });
 
   const { data: configData } = await supabase
     .from('configuracion')
@@ -34,12 +40,31 @@ const CatalogoProducto = () => {
     .limit(1)
     .single();
 
+  const calcularStock = (txs) => {
+  const stock = {};
+  (txs || []).forEach(t => {
+    if (!stock[t.color]) stock[t.color] = {};
+    if (!stock[t.color][t.talla]) stock[t.color][t.talla] = 0;
+    if (t.tipo === 'LIQUIDACION') {
+      stock[t.color][t.talla] = 0;
+    } else if (t.tipo === 'SALIDA') {
+      stock[t.color][t.talla] = Math.max(0, stock[t.color][t.talla] - t.cantidad);
+    } else if (t.tipo === 'REVERSION') {
+      stock[t.color][t.talla] += t.cantidad;
+    } else {
+      stock[t.color][t.talla] += t.cantidad;
+    }
+  });
+  return stock;
+};
+const stockCalculado = calcularStock(transactions);
+
   const tallas = prod?.tallas?.length ? prod.tallas : ['S', 'M', 'L', 'XL'];
   const porTalla = {};
   tallas.forEach(talla => {
     porTalla[talla] = [];
     (prod?.colors || []).forEach(color => {
-      const cantidad = prod?.stock?.[color]?.[talla] || 0;
+      const cantidad = stockCalculado?.[color]?.[talla] || 0;
       if (cantidad > 0) {
         // Buscar imagen en imagenes_colores primero, luego en swatches
         const imageUrl = prod?.imagenes_colores?.[color] 
