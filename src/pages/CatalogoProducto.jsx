@@ -32,7 +32,8 @@ const CatalogoProducto = () => {
   .from('stock_transactions')
   .select('*')
   .eq('modelo', prod?.modelo)
-  .order('fecha', { ascending: true });
+  .order('fecha', { ascending: true })
+  .order('hora', { ascending: true });
 
   const { data: configData } = await supabase
     .from('configuracion')
